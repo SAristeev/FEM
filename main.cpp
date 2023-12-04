@@ -1,0 +1,66 @@
+#include "FEM.hpp"
+int main(){
+    std::string FileName = "C:/WD/2dtri_force.fc";
+    std::ifstream fc_file(FileName, std::ios::in);
+    if (!fc_file) {
+        throw std::runtime_error("cannot open fc file: " + FileName);
+    }
+    auto fc = nlohmann::json::parse(fc_file);
+    fc_file.close();
+
+    int dim;
+    read_dimensions(fc, dim);
+
+    // read materials
+    std::map<int, unsigned char> matid_threshold_map;
+    std::map<int, unsigned char> block_threshold_map;
+    std::vector<material_t> materials;
+
+
+    read_materials(fc, materials, matid_threshold_map);
+
+    std::vector<int> blocks;
+    std::vector<unsigned char> thresholds;
+
+    read_blocks(fc, matid_threshold_map, blocks, thresholds, block_threshold_map);
+
+    UnstructedMesh mesh;
+    read_mesh(fc, mesh);
+
+    std::vector<int> rows;
+    std::vector<int> cols;
+    buildFullGlobalMatrixStruct(mesh, rows, cols);
+
+    std::vector<double> K;
+    buildFullGlobalMatrix(dim, K, materials[0], mesh, rows, cols);
+
+    std::vector<double> F;
+    createLoads(dim, fc, F, mesh);
+    applyconstraints(fc, K, rows, cols, F, mesh);
+    std::vector<double> x;
+    solve(dim, K, rows, cols, F, x);
+    if (1){
+        std::cout << "K" << std::endl;
+        for (int i = 0; i < K.size(); ++i) {
+        
+            std::cout << std::scientific << K[i] << ", ";
+        }
+        std::cout << std::endl;
+        std::cout << "cols" << std::endl;    
+        for (int i = 0; i < cols.size(); ++i) {
+            std::cout << cols[i] << ", ";
+        }
+        std::cout << std::endl;
+        std::cout << "rows" << std::endl;
+        for (int i = 0; i < rows.size(); ++i) {
+            std::cout << rows[i] << ", ";
+        }
+        std::cout << std::endl;
+    }
+    if (1) {
+        for (int i = 0; i < F.size(); ++i) {
+            std::cout << "f(" << i << ") = " << F[i] << ", x(" << i << ") = "  << x[i] << "\n";
+        }
+    }
+    std::cout << std::endl;
+}
