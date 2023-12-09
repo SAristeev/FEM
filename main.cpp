@@ -92,7 +92,6 @@ int main(int argc, char* argv[]) {
         }
     }
     std::vector<double> sigma;
-    std::cout << "******************************************************88";
     resultants(dim, materials[0], sigma, x, mesh, rows, cols);
     
 }

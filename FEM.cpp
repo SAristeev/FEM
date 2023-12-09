@@ -285,20 +285,20 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 				k2 = q;
 			}
 		}
-		raw_K[4 * i2 + 0] += A[0 * Bcols + 3];
-		raw_K[4 * i2 + 1] += A[0 * Bcols + 4];
-		raw_K[4 * i2 + 2] += A[1 * Bcols + 3];
-		raw_K[4 * i2 + 3] += A[1 * Bcols + 4];
+		raw_K[4 * i2 + 0] += A[0 * Bcols + 2];
+		raw_K[4 * i2 + 1] += A[0 * Bcols + 3];
+		raw_K[4 * i2 + 2] += A[1 * Bcols + 2];
+		raw_K[4 * i2 + 3] += A[1 * Bcols + 3];
 		
-		raw_K[4 * j2 + 0] += A[2 * Bcols + 3];
-		raw_K[4 * j2 + 1] += A[2 * Bcols + 4];
-		raw_K[4 * j2 + 2] += A[3 * Bcols + 3];
-		raw_K[4 * j2 + 3] += A[3 * Bcols + 4];
+		raw_K[4 * j2 + 0] += A[2 * Bcols + 2];
+		raw_K[4 * j2 + 1] += A[2 * Bcols + 3];
+		raw_K[4 * j2 + 2] += A[3 * Bcols + 2];
+		raw_K[4 * j2 + 3] += A[3 * Bcols + 3];
 		
-		raw_K[4 * k2 + 0] += A[4 * Bcols + 3];
-		raw_K[4 * k2 + 1] += A[4 * Bcols + 4];
-		raw_K[4 * k2 + 2] += A[5 * Bcols + 3];
-		raw_K[4 * k2 + 3] += A[5 * Bcols + 4];
+		raw_K[4 * k2 + 0] += A[4 * Bcols + 2];
+		raw_K[4 * k2 + 1] += A[4 * Bcols + 3];
+		raw_K[4 * k2 + 2] += A[5 * Bcols + 2];
+		raw_K[4 * k2 + 3] += A[5 * Bcols + 3];
 
 		int i3 = -1;
 		int j3 = -1;
@@ -315,20 +315,21 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 				k3 = q;
 			}
 		}
-		raw_K[4 * i3 + 0] += A[0 * Bcols + 5];
-		raw_K[4 * i3 + 1] += A[0 * Bcols + 6];
-		raw_K[4 * i3 + 2] += A[1 * Bcols + 5];
-		raw_K[4 * i3 + 3] += A[1 * Bcols + 6];
+		raw_K[4 * i3 + 0] += A[0 * Bcols + 4];
+		raw_K[4 * i3 + 1] += A[0 * Bcols + 5];
+		raw_K[4 * i3 + 2] += A[1 * Bcols + 4];
+		raw_K[4 * i3 + 3] += A[1 * Bcols + 5];
 						 
-		raw_K[4 * j3 + 0] += A[2 * Bcols + 5];
-		raw_K[4 * j3 + 1] += A[2 * Bcols + 6];
-		raw_K[4 * j3 + 2] += A[3 * Bcols + 5];
-		raw_K[4 * j3 + 3] += A[3 * Bcols + 6];
+		raw_K[4 * j3 + 0] += A[2 * Bcols + 4];
+		raw_K[4 * j3 + 1] += A[2 * Bcols + 5];
+		raw_K[4 * j3 + 2] += A[3 * Bcols + 4];
+		raw_K[4 * j3 + 3] += A[3 * Bcols + 5];
 						 
-		raw_K[4 * k3 + 0] += A[4 * Bcols + 5];
-		raw_K[4 * k3 + 1] += A[4 * Bcols + 6];
-		raw_K[4 * k3 + 2] += A[5 * Bcols + 5];
-		raw_K[4 * k3 + 3] += A[5 * Bcols + 6];
+		raw_K[4 * k3 + 0] += A[4 * Bcols + 4];
+		raw_K[4 * k3 + 1] += A[4 * Bcols + 5];
+		raw_K[4 * k3 + 2] += A[5 * Bcols + 4];
+		raw_K[4 * k3 + 3] += A[5 * Bcols + 5];
+
 	}
 	K = std::vector<double>(raw_K, raw_K + blocksize * blocksize * nnz);
 	free(raw_K);
@@ -664,8 +665,8 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 		const double alpha = 1.0;
 		const double beta = 0.0;
 		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, alpha, D, Ddim, B, Brows, beta, Z, Ddim);
-		cblas_dgemv(layout, nontrans, Ddim, Bcols,alpha, Z, Ddim, u, Bcols, beta, sigma_loc, Brows);
-
+		cblas_dgemm(layout, nontrans, nontrans, Ddim, 1, Bcols, alpha, Z, Ddim, u, Bcols, beta, sigma_loc, Brows);
+		
 		int i1 = -1;
 		int j1 = -1;
 		int k1 = -1;
@@ -728,8 +729,7 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 	}
 	
 
-
-
+	
 	MKL_INT _iparm[64];
 	void* _pt[64];
 
@@ -825,10 +825,11 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 		(MKL_INT*)&idum, (MKL_INT*)&nrhs, (MKL_INT*)&_iparm[0], (MKL_INT*)&msglvl, (void*)h_b, (void*)h_x, (MKL_INT*)&error);
 	mkl_free_buffers();
 
+
 	free(C);
-	free(D);
 	free(B);
-	free(u);
-	
+	free(sigma_loc);
+	free(Z);
+	free(D);
 
 }
