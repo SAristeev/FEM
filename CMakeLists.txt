@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.17.0 FATAL_ERROR)
 project(FEM VERSION 0.3.0 LANGUAGES CXX C)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMake")
 
-find_package(MKL REQUIRED)
+find_package(MKL CONFIG REQUIRED PATHS $ENV{MKLROOT})
 
 add_executable(FEM
   FEM.cpp
@@ -15,5 +14,4 @@ add_executable(FEM
   external/base64/base64.cpp
 )
 
-target_include_directories(FEM PUBLIC ${MKL_INCLUDE_DIR})
-target_link_libraries(FEM LINK_PUBLIC ${MKL_LIBRARIES})
+target_link_libraries(FEM PUBLIC MKL::MKL)
