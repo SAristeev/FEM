@@ -1,6 +1,35 @@
 #include "FEM.hpp"
-int main(){
-    std::string FileName = "C:/WD/2dtri_force.fc";
+int main(int argc, char* argv[]) {
+
+    std::unordered_map<std::string, std::string>  parsed_params;//in the pair {key,param} param may be empty
+
+    for (int pos = 1; pos < argc; ++pos) {
+        if (argv[pos][0] == '-') {//key is found
+            std::string key(argv[pos]);
+
+            if (pos + 1 < argc && argv[pos + 1][0] != '-') {//value is found
+                std::string value(argv[pos + 1]);
+
+                parsed_params.insert(std::make_pair(key, value));
+                ++pos;
+                continue;
+            }
+            parsed_params.insert(std::make_pair(key, std::string()));
+        }
+    }
+    std::string FileName;
+    {
+        const auto it = parsed_params.find("--fc");
+        if (it != parsed_params.end() && !it->second.empty()) {
+            FileName = it->second;
+            parsed_params.erase(it);
+        }
+        else {
+            printf("ERROR: Path to mesh is not provided!\n");
+        }
+
+    }
+    
     std::ifstream fc_file(FileName, std::ios::in);
     if (!fc_file) {
         throw std::runtime_error("cannot open fc file: " + FileName);
