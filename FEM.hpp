@@ -9,7 +9,7 @@
 #include <fstream>
 #include <vector>
 #include <string>
-
+#include "mkl.h"
 using json = nlohmann::json;
 
 struct material_t
@@ -41,10 +41,11 @@ void read_blocks(const json& fc, std::map<int, unsigned char>& matid_threshold_m
 void read_mesh(const json& fc, UnstructedMesh& mesh);
 
 void createLoads(const int& dim, const json& fc, std::vector<double>& F, const UnstructedMesh& mesh);
-void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<int>& rows, const std::vector<int>& cols, std::vector<double>& F, const UnstructedMesh& mesh);
-void solve(const int& dim, const std::vector<double>& K, const std::vector<int>& rows, const std::vector<int>& cols, const std::vector<double>& F, std::vector<double>& x);
-void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<int>& rows, std::vector<int>& cols);
-void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t mat, const UnstructedMesh& mesh, const std::vector<int>& rows, const std::vector<int>& cols);
+void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, std::vector<double>& F, const UnstructedMesh& mesh);
+void solve(const int& dim, const std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, const std::vector<double>& F, std::vector<double>& x);
+void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<MKL_INT>& rows, std::vector<MKL_INT>& cols);
+void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t mat, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols);
+void resultants(const int& dim, material_t material, std::vector<double>& sigma, const std::vector<double>& x, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols);
 
 
 #endif // !__FEM_HPP__

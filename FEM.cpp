@@ -1,5 +1,5 @@
 #include "FEM.hpp"
-#include "mkl.h"
+
 
 void read_dimensions(const json& fc, int& dim) {
 	if (fc["settings"]["dimensions"] == "2D") {
@@ -119,7 +119,7 @@ void read_mesh(const json& fc, UnstructedMesh& mesh) {
 }
 
 
-void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<int>& rows, std::vector<int>& cols) {
+void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<MKL_INT>& rows, std::vector<MKL_INT>& cols) {
 	if (!rows.empty() || !cols.empty()) {
 		throw std::runtime_error("buildFullGlobalMatrixStruct: try to fill non-empty matrix");
 	}
@@ -153,7 +153,7 @@ void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<int>& r
 }
 
 
-void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t material, const UnstructedMesh& mesh, const std::vector<int>& rows, const std::vector<int>& cols) {
+void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t material, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols) {
 	if (dim != 2) {
 		throw std::runtime_error("buildFullGlobalMatrix: try to solve non 2D task");
 	}
@@ -239,8 +239,6 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 		const double beta = 0.0;
 		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, alpha, D, Ddim, B, Brows, beta, Z, Ddim);
 		cblas_dgemm(layout, trans, nontrans, Bcols, Bcols, Ddim, S, B, Ddim, Z, Brows, beta, A, Bcols);
-
-		int row;
 
 		int i1 = -1;
 		int j1 = -1;
@@ -378,7 +376,7 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 	}
 }
 
-void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<int>& rows, const std::vector<int>& cols, std::vector<double>& F, const UnstructedMesh& mesh) {
+void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, std::vector<double>& F, const UnstructedMesh& mesh) {
 
 	auto get_mesh_data = [&fc](std::string const& key, size_t* out_size = nullptr) -> char*
 		{
@@ -465,7 +463,7 @@ void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<
 	}
 }
 
-void solve(const int& dim, const std::vector<double>& K, const std::vector<int>& rows, const std::vector<int>& cols, const std::vector<double>& F, std::vector<double>& x) {
+void solve(const int& dim, const std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, const std::vector<double>& F, std::vector<double>& x) {
 	MKL_INT _iparm[64];
 	void* _pt[64];
 
@@ -563,4 +561,274 @@ void solve(const int& dim, const std::vector<double>& K, const std::vector<int>&
 		(void*)h_ValsA, (MKL_INT*)h_RowsA, (MKL_INT*)h_ColsA,
 		(MKL_INT*)&idum, (MKL_INT*)&nrhs, (MKL_INT*)&_iparm[0], (MKL_INT*)&msglvl, (void*)h_b, (void*)h_x, (MKL_INT*)&error);
 	mkl_free_buffers();
+}
+
+void resultants(const int& dim, material_t material, std::vector<double>& sigma, const std::vector<double>& x, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols) {
+	if (dim != 2) {
+		throw std::runtime_error("resultants: try to solve non 2D task");
+	}
+	int blocksize = dim;
+	size_t n = rows.size() - 1;
+	size_t nnz = rows[n];
+
+	double* C = reinterpret_cast<double*>(malloc(nnz * sizeof(double)));
+	for (int i = 0; i < nnz; i++) {
+		C[i] = 0.0;
+	}
+	double* b = reinterpret_cast<double*>(malloc(n * sizeof(double)));
+	for (int i = 0; i < n; i++) {
+		b[i] = 0.0;
+	}
+	sigma.resize(n);
+	double* sigma_ = sigma.data();
+	for (int i = 0; i < n; i++) {
+		sigma_[i] = 0.0;
+	}
+
+	//std::memset(raw_K, 0.0, blocksize * blocksize * nnz * sizeof(double));
+	
+	// D matrix	
+	int Ddim = 3;
+
+	double* D = reinterpret_cast<double*>(malloc(Ddim * Ddim * sizeof(double)));
+
+	// filling D
+	fp::fp_t E = material.E;
+	fp::fp_t nu = material.nu;
+
+	D[0] = E * (1 - nu) / ((1 + nu) * (1 - 2 * nu));
+	D[1] = E * nu / ((1 + nu) * (1 - 2 * nu));
+	D[2] = 0;
+	D[3] = E * nu / ((1 + nu) * (1 - 2 * nu));
+	D[4] = E * (1 - nu) / ((1 + nu) * (1 - 2 * nu));
+	D[5] = 0;
+	D[6] = 0;
+	D[7] = 0;
+	D[8] = E / (2 * (1 + nu));
+
+	// only if Tri
+	int Brows = 3;
+	int Bcols = 6;
+	double* B = reinterpret_cast<double*>(malloc(Brows * Bcols * sizeof(double)));
+	double* Z = reinterpret_cast<double*>(malloc(Ddim * Bcols * sizeof(double)));
+	double* u = reinterpret_cast<double*>(malloc(Bcols * sizeof(double)));
+	double* sigma_loc = reinterpret_cast<double*>(malloc(Brows * sizeof(double)));
+	for (int e = 0; e < mesh.elemids.size(); e++) {
+		std::vector<int> ijk = { mesh.elems[mesh.nodes_per_elem[e] + 0] - 1,
+									mesh.elems[mesh.nodes_per_elem[e] + 1] - 1,
+									mesh.elems[mesh.nodes_per_elem[e] + 2] - 1 };
+		std::sort(ijk.begin(), ijk.end());
+
+		int i = ijk[0];
+		int j = ijk[1];
+		int k = ijk[2];
+		double J = (mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
+			(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y);
+
+		double S = std::abs(J) / 2.0;
+
+		B[0] = mesh.nodes[j].y - mesh.nodes[k].y;
+		B[1] = 0;
+		B[2] = mesh.nodes[k].x - mesh.nodes[j].x;
+
+		B[3] = 0;
+		B[4] = mesh.nodes[k].x - mesh.nodes[j].x;
+		B[5] = mesh.nodes[j].y - mesh.nodes[k].y;
+
+		B[6] = mesh.nodes[k].y - mesh.nodes[i].y;
+		B[7] = 0;
+		B[8] = mesh.nodes[i].x - mesh.nodes[k].x;
+
+		B[9] = 0;
+		B[10] = mesh.nodes[i].x - mesh.nodes[k].x;
+		B[11] = mesh.nodes[k].y - mesh.nodes[i].y;
+
+		B[12] = mesh.nodes[i].y - mesh.nodes[j].y;
+		B[13] = 0;
+		B[14] = mesh.nodes[j].x - mesh.nodes[i].x;
+
+		B[15] = 0;
+		B[16] = mesh.nodes[j].x - mesh.nodes[i].x;
+		B[17] = mesh.nodes[i].y - mesh.nodes[j].y;
+
+		u[0] = x[2 * i + 0];
+		u[1] = x[2 * i + 1];
+		u[2] = x[2 * j + 0];
+		u[3] = x[2 * j + 1];
+		u[4] = x[2 * k + 0];
+		u[5] = x[2 * k + 1];
+
+		CBLAS_LAYOUT layout = CblasColMajor;
+		CBLAS_TRANSPOSE nontrans = CblasNoTrans;
+		CBLAS_TRANSPOSE trans = CblasTrans;
+		const double alpha = 1.0;
+		const double beta = 0.0;
+		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, alpha, D, Ddim, B, Brows, beta, Z, Ddim);
+		cblas_dgemv(layout, nontrans, Ddim, Bcols,alpha, Z, Ddim, u, Bcols, beta, sigma_loc, Brows);
+
+		int i1 = -1;
+		int j1 = -1;
+		int k1 = -1;
+		for (int q = rows[i]; q < rows[i + 1]; q++) {
+			//zero or one indexing
+			if (cols[q] == i) {
+				i1 = q;
+			}
+			if (cols[q] == j) {
+				j1 = q;
+			}
+			if (cols[q] == k) {
+				k1 = q;
+			}
+		}
+		C[i1] = J / 12.0;
+		C[j1] = J / 24.0;
+		C[k1] = J / 24.0;
+		b[i] += J * sigma_loc[0] / 6.0;
+
+		int i2 = -1;
+		int j2 = -1;
+		int k2 = -1;
+		for (int q = rows[j]; q < rows[j + 1]; q++) {
+			//zero or one indexing
+			if (cols[q] == i) {
+				i2 = q;
+			}
+			if (cols[q] == j) {
+				j2 = q;
+			}
+			if (cols[q] == k) {
+				k2 = q;
+			}
+		}
+		C[i2] = J / 24.0;
+		C[j2] = J / 12.0;
+		C[k2] = J / 24.0;
+		b[j] += J * sigma_loc[1] / 6.0;
+
+		int i3 = -1;
+		int j3 = -1;
+		int k3 = -1;
+		for (int q = rows[k]; q < rows[k + 1]; q++) {
+			//zero or one indexing
+			if (cols[q] == i) {
+				i3 = q;
+			}
+			if (cols[q] == j) {
+				j3 = q;
+			}
+			if (cols[q] == k) {
+				k3 = q;
+			}
+		}
+		C[i3] = J / 24.0;
+		C[j3] = J / 24.0;
+		C[k3] = J / 12.0;
+		b[k] += J * sigma_loc[2] / 6.0;
+	}
+	
+
+
+
+	MKL_INT _iparm[64];
+	void* _pt[64];
+
+	// Setup Pardiso control parameters
+	for (int i = 0; i < 64; i++) {
+		_iparm[i] = 0;
+	}
+
+	_iparm[0] = 1;  /* No solver default */
+	_iparm[1] = 3; /* Fill-in reordering from METIS */ // !!! = 0
+	/* Numbers of processors, value of OMP_NUM_THREADS */
+	_iparm[2] = 1;
+	_iparm[3] = 0; /* No iterative-direct algorithm */
+	_iparm[4] = 0; /* No user fill-in reducing permutation */
+	_iparm[5] = 0; /* If =0 then write solution only into x. If =1 then the RightHandSide-array will replaced by the solution*/
+	_iparm[6] = 0; /* Not in use */
+	_iparm[7] = 2; /* Max numbers of iterative refinement steps */
+	_iparm[8] = 0; /* Not in use */
+	_iparm[11] = 0; /* Not in use */
+	if (1) { // sym by default
+		_iparm[9] = 8;
+		_iparm[10] = 0; /* Disable scaling. Default for symmetric indefinite matrices. */
+		_iparm[12] = 0; /* Maximum weighted matching algorithm is switched-off (default for symmetric). Try iparm[12] = 1 in case of inappropriate accuracy */
+	}
+	else {
+		_iparm[9] = 13;
+		_iparm[10] = 1; /* Use nonsymmetric permutation and scaling MPS */
+		_iparm[12] = 1; /*1!!! Maximum weighted matching algorithm is switched-on (default for non-symmetric) */
+	}
+	//_iparm[12] = 1; /*1!!! Maximum weighted matching algorithm is switched-on (default for non-symmetric) */
+	_iparm[13] = 0; /* Output: Number of perturbed pivots */
+	_iparm[14] = 0; /* Not in use */
+	_iparm[15] = 0; /* Not in use */
+	_iparm[16] = 0; /* Not in use */
+	_iparm[17] = -1; /* Output: Number of nonzeros in the factor LU */
+	_iparm[18] = -1; /* Output: Mflops for LU factorization */
+	_iparm[19] = 0; /* Output: Numbers of CG Iterations */
+	_iparm[26] = 1; /* Matrix Checker */
+	if (1) // double by default
+		_iparm[27] = 0;
+	else
+		_iparm[27] = 1;
+
+	_iparm[59] = 0;
+
+	_iparm[34] = 1; // zero-indexing
+	_iparm[36] = 0; // bsr: block size
+	for (int i = 0; i < 64; i++) {
+		_pt[i] = 0;
+	}
+
+
+
+	const MKL_INT* h_RowsA = rows.data();
+	const MKL_INT* h_ColsA = cols.data();
+	const double* h_ValsA = C;
+
+	const double* h_b = b;
+	double* h_x = sigma_;
+	MKL_INT nrhs = 1;
+	double ddum = 0.0;
+	MKL_INT maxfct = 1;
+	MKL_INT msglvl = 3;
+	MKL_INT mnum = 1;
+	MKL_INT mtype = 11;
+	MKL_INT idum = 0;
+	MKL_INT phase = 11;
+	MKL_INT error = 0;
+
+	//phase11
+
+	pardiso(&_pt[0], (MKL_INT*)&maxfct, (MKL_INT*)&mnum, (MKL_INT*)&mtype, (MKL_INT*)&phase, (MKL_INT*)&n,
+		(void*)h_ValsA, (MKL_INT*)h_RowsA, (MKL_INT*)h_ColsA,
+		(MKL_INT*)&idum, (MKL_INT*)&nrhs, (MKL_INT*)&_iparm[0], (MKL_INT*)&msglvl, &ddum, &ddum, (MKL_INT*)&error);
+
+
+	//phase22
+	phase = 22;
+	pardiso((MKL_INT*)&_pt[0], (MKL_INT*)&maxfct, (MKL_INT*)&mnum, (MKL_INT*)&mtype, (MKL_INT*)&phase, (MKL_INT*)&n,
+		(void*)h_ValsA, (MKL_INT*)h_RowsA, (MKL_INT*)h_ColsA,
+		(MKL_INT*)&idum, (MKL_INT*)&nrhs, (MKL_INT*)&_iparm[0], (MKL_INT*)&msglvl, &ddum, &ddum, (MKL_INT*)&error);
+
+	//phase33
+	phase = 33;
+	pardiso((MKL_INT*)&_pt[0], (MKL_INT*)&maxfct, (MKL_INT*)&mnum, (MKL_INT*)&mtype, (MKL_INT*)&phase, (MKL_INT*)&n,
+		(void*)h_ValsA, (MKL_INT*)h_RowsA, (MKL_INT*)h_ColsA,
+		(MKL_INT*)&idum, (MKL_INT*)&nrhs, (MKL_INT*)&_iparm[0], (MKL_INT*)&msglvl, (void*)h_b, (void*)h_x, (MKL_INT*)&error);
+
+	//phase -1
+	phase = -1;
+	pardiso(&_pt[0], (MKL_INT*)&maxfct, (MKL_INT*)&mnum, (MKL_INT*)&mtype, (MKL_INT*)&phase, (MKL_INT*)&n,
+		(void*)h_ValsA, (MKL_INT*)h_RowsA, (MKL_INT*)h_ColsA,
+		(MKL_INT*)&idum, (MKL_INT*)&nrhs, (MKL_INT*)&_iparm[0], (MKL_INT*)&msglvl, (void*)h_b, (void*)h_x, (MKL_INT*)&error);
+	mkl_free_buffers();
+
+	free(C);
+	free(D);
+	free(B);
+	free(u);
+	
+
 }

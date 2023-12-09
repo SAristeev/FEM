@@ -27,8 +27,8 @@ int main(){
     UnstructedMesh mesh;
     read_mesh(fc, mesh);
 
-    std::vector<int> rows;
-    std::vector<int> cols;
+    std::vector<MKL_INT> rows;
+    std::vector<MKL_INT> cols;
     buildFullGlobalMatrixStruct(mesh, rows, cols);
 
     std::vector<double> K;
@@ -39,7 +39,7 @@ int main(){
     applyconstraints(fc, K, rows, cols, F, mesh);
     std::vector<double> x;
     solve(dim, K, rows, cols, F, x);
-    if (1){
+    if (0){
         std::cout << "K" << std::endl;
         for (int i = 0; i < K.size(); ++i) {
         
@@ -57,10 +57,13 @@ int main(){
         }
         std::cout << std::endl;
     }
-    if (1) {
+    if (0) {
         for (int i = 0; i < F.size(); ++i) {
             std::cout << "f(" << i << ") = " << F[i] << ", x(" << i << ") = "  << x[i] << "\n";
         }
     }
-    std::cout << std::endl;
+    std::vector<double> sigma;
+    std::cout << "******************************************************88";
+    resultants(dim, materials[0], sigma, x, mesh, rows, cols);
+    
 }
