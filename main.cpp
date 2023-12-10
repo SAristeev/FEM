@@ -94,27 +94,13 @@ int main(int argc, char* argv[]) {
     }
     std::vector<double> sigma;
     resultants(dim, materials[0], sigma, x, mesh, rows, cols);
-
     {
         std::vector<vtu::spatial_data_t> p_data;
-        int n_points = mesh.nodes.size();
-        auto bcdat = new uint8_t[3 * n_points];
-        memset(bcdat, 0, sizeof(uint8_t) * 3 * n_points);
-        for (int i = 0; i < 3 * n_points; i++)
-        {
-            bcdat[i] = 1;
-        }
-        p_data.emplace_back(bcdat, "is fixed", 3);
+        p_data.emplace_back(x.data(), "Displacement", 2);
+        p_data.emplace_back(F.data(), "Forces", 2);
 
         std::vector<vtu::spatial_data_t> c_data;
-        int n_cells = mesh.elem_type.size();
-        auto matdat = new uint8_t[n_cells];
-        memset(matdat, 0, sizeof(uint8_t) * n_cells);
-        for (int i = 0; i < n_cells; i++)
-        {
-            matdat[i] = 1;
-        }
-        c_data.emplace_back(matdat, "mat id", 1);
+        c_data.emplace_back(sigma.data(), "mat id", 1);
 
         vtu::writer_t writer("abc.vtu", true);
         auto p_cords = std::span<double>{ (double*)mesh.nodes.data(), mesh.nodes.size() * 3 };
