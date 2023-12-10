@@ -530,7 +530,7 @@ void solve(const int& dim, const std::vector<double>& K, const std::vector<MKL_I
 	MKL_INT nrhs = 1;
 	double ddum = 0.0;
 	MKL_INT maxfct = 1;
-	MKL_INT msglvl = 3;
+	MKL_INT msglvl = 0;
 	MKL_INT mnum = 1;
 	MKL_INT mtype = 11;
 	MKL_INT idum = 0;
@@ -792,7 +792,7 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 	MKL_INT nrhs = 1;
 	double ddum = 0.0;
 	MKL_INT maxfct = 1;
-	MKL_INT msglvl = 3;
+	MKL_INT msglvl = 0;
 	MKL_INT mnum = 1;
 	MKL_INT mtype = 11;
 	MKL_INT idum = 0;
@@ -827,9 +827,12 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 
 
 	free(C);
-	free(B);
-	free(sigma_loc);
-	free(Z);
+	free(b);
+
 	free(D);
+	free(B);
+	free(Z);
+	free(u);
+	free(sigma_loc);
 
 }
