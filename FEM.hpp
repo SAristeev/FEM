@@ -32,6 +32,7 @@ struct UnstructedMesh {
 	std::vector<int>          elems;
 	std::vector<int>          elemids;
 	std::vector<int>          nodes_per_elem;
+	std::vector<uint8_t>      elem_type;
 	std::map<int, int>        map_node_numeration;
 };
 

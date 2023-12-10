@@ -1,4 +1,5 @@
 #include "FEM.hpp"
+#include "vtu_writer/include/vtu_writer.h"
 int main(int argc, char* argv[]) {
 
     std::unordered_map<std::string, std::string>  parsed_params;//in the pair {key,param} param may be empty
@@ -25,7 +26,7 @@ int main(int argc, char* argv[]) {
             parsed_params.erase(it);
         }
         else {
-            printf("ERROR: Path to mesh is not provided!\n");
+            printf("ERROR: Path to fc is not provided!\n");
         }
 
     }
@@ -93,5 +94,35 @@ int main(int argc, char* argv[]) {
     }
     std::vector<double> sigma;
     resultants(dim, materials[0], sigma, x, mesh, rows, cols);
-    
+
+    {
+        std::vector<vtu::spatial_data_t> p_data;
+        int n_points = mesh.nodes.size();
+        auto bcdat = new uint8_t[3 * n_points];
+        memset(bcdat, 0, sizeof(uint8_t) * 3 * n_points);
+        for (int i = 0; i < 3 * n_points; i++)
+        {
+            bcdat[i] = 1;
+        }
+        p_data.emplace_back(bcdat, "is fixed", 3);
+
+        std::vector<vtu::spatial_data_t> c_data;
+        int n_cells = mesh.elem_type.size();
+        auto matdat = new uint8_t[n_cells];
+        memset(matdat, 0, sizeof(uint8_t) * n_cells);
+        for (int i = 0; i < n_cells; i++)
+        {
+            matdat[i] = 1;
+        }
+        c_data.emplace_back(matdat, "mat id", 1);
+
+        vtu::writer_t writer("abc.vtu", true);
+        auto p_cords = std::span<double>{ (double*)mesh.nodes.data(), mesh.nodes.size() * 3 };
+        std::vector<int> conn(mesh.elems.size());
+        for (int i = 0; i < mesh.elems.size(); i++) {
+            conn[i] = mesh.map_node_numeration[mesh.elems[i]];
+        }
+        writer.write(p_cords, conn, mesh.elem_type, p_data, c_data);
+    }
+    return 0;
 }

@@ -58,6 +58,7 @@ void read_mesh(const json& fc, UnstructedMesh& mesh) {
 
 
 	std::vector<int> nodes_per_elem(elems_count + 1);
+	std::vector<uint8_t> elem_type(elems_count + 1);
 
 	// Only 2d Tri mesh
 	int offset = 0;
@@ -66,6 +67,7 @@ void read_mesh(const json& fc, UnstructedMesh& mesh) {
 		switch (etypes[elem_ID]) {
 		case '\n':
 			nodes_per_elem[elem_ID] = offset;
+			elem_type[elem_ID] = 5;
 			offset += 3;
 			break;
 		default:
@@ -115,6 +117,7 @@ void read_mesh(const json& fc, UnstructedMesh& mesh) {
 	mesh.elems = elems;
 	mesh.nids = nids;
 	mesh.elemids = elemids;
+	mesh.elem_type = elem_type;
 	mesh.nodes_per_elem = nodes_per_elem;
 }
 
