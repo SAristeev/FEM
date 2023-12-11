@@ -209,7 +209,7 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 
 		double S = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
 			(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y)) / 2;
-
+		double delta = S;
 		B[0] = mesh.nodes[j].y - mesh.nodes[k].y;
 		B[1] = 0;
 		B[2] = mesh.nodes[k].x - mesh.nodes[j].x;
@@ -240,7 +240,7 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 		CBLAS_TRANSPOSE trans = CblasTrans;
 		const double beta = 0.0;
 		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, S, D, Ddim, B, Brows, beta, Z, Ddim);
-		cblas_dgemm(layout, trans, nontrans, Bcols, Bcols, Ddim, S, B, Ddim, Z, Brows, beta, A, Bcols);
+		cblas_dgemm(layout, trans, nontrans, Bcols, Bcols, Ddim, delta * S, B, Ddim, Z, Brows, beta, A, Bcols);
 		
 		int i1 = -1;
 		int j1 = -1;
@@ -390,20 +390,21 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 						return key;
 				};
 			
-			for(int p = 0; p < apply_to_size - 1; p++) {
+			auto begin0 = find_by_value(0);
+			auto begin1 = find_by_value(1);
+			F[2 * mesh.map_node_numeration.at(apply_to[0])] += data[0] * std::abs((begin0 - begin1));
+
+			for(int p = 1; p < apply_to_size - 1; p++) {
+				auto prev = find_by_value(p - 1);
 				auto cur  = find_by_value(p);
 				auto next = find_by_value(p + 1);
-	
-				if (p == 0) {
-					F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((next - cur)) / 2;
-				}
-				else {
-					F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((next - cur));
-				}
-				if (p == apply_to_size - 2) {
-					F[2 * mesh.map_node_numeration.at(apply_to[p + 1])] += data[0] * std::abs((next - cur));
-				}
+				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((next - cur));
+				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((prev - cur));
 			}
+			auto end0 = find_by_value(apply_to_size - 2);
+			auto end1 = find_by_value(apply_to_size - 1);
+			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1])] += data[0] * std::abs((end0 - end1));
+
 		}
 		if (std::abs(data[1]) > 1e-8) {
 			std::map<double, int> y_side;
@@ -416,19 +417,21 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 						return key;
 				};
 
-			for (int p = 0; p < apply_to_size - 1; p++) {
+
+			auto begin0 = find_by_value(0);
+			auto begin1 = find_by_value(1);
+			F[2 * mesh.map_node_numeration.at(apply_to[0]) + 1] += data[1] * std::abs((begin0 - begin1));
+
+			for (int p = 1; p < apply_to_size - 1; p++) {
+				auto prev = find_by_value(p - 1);
 				auto cur = find_by_value(p);
 				auto next = find_by_value(p + 1);
-				if (p == 0) {
-					F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((next - cur));
-				}
-				else {
-					F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((next - cur));
-				}
-				if (p == apply_to_size - 2) {
-					F[2 * mesh.map_node_numeration.at(apply_to[p + 1]) + 1] += data[1] * std::abs((next - cur)) / 2;
-				}
+				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((next - cur));
+				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((prev - cur));
 			}
+			auto end0 = find_by_value(apply_to_size - 2);
+			auto end1 = find_by_value(apply_to_size - 1);
+			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1]) + 1] += data[1] * std::abs((end0 - end1));
 		}
 	}
 }
@@ -489,6 +492,21 @@ void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<
 
 		for (int& node : apply_to) {
 			int row = mesh.map_node_numeration.at(node);
+			//mesh.nodes[row];
+			int n = mesh.nodes.size();
+			for (int j = 0; j < n; j++) {
+				for (int i = rows[j]; i < rows[j + 1]; i++) {
+					if (flag[0] && cols[i] == row) {
+						K[4 * i + 0] = 0;
+						K[4 * i + 2] = 0;
+					}
+					if (flag[1] && cols[i] == row) {
+						K[4 * i + 1] = 0;
+						K[4 * i + 3] = 0;
+					}
+				}
+			}
+
 			for (int i = rows[row]; i < rows[row + 1]; i++) {
 				if (flag[0]) {
 					if (cols[i] == row) {
