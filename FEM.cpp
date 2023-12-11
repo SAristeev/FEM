@@ -371,9 +371,63 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 			b64decode_host(data_b64.data(), data_b64.size(), reinterpret_cast<char*>(&(data[i])));
 		}
 
-		for (int& node : apply_to) {
+		/*for (int& node : apply_to) {
 			for (int i = 0; i < 2; i++) {
 				F[2 * mesh.map_node_numeration.at(node) + i] += data[i];
+			}
+		}*/
+
+
+		if (std::abs(data[0]) > 1e-8 ) {
+			std::map<double, int> x_side;
+			for (int p = 0; p < apply_to_size; p++) {
+				x_side[mesh.nodes[mesh.map_node_numeration.at(apply_to[p])].y] = p;
+			}
+
+			auto find_by_value = [&x_side](int target) {
+				for (const auto& [key, value] : x_side)
+					if (value == target)
+						return key;
+				};
+			
+			for(int p = 0; p < apply_to_size - 1; p++) {
+				auto cur  = find_by_value(p);
+				auto next = find_by_value(p + 1);
+	
+				if (p == 0) {
+					F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((next - cur)) / 2;
+				}
+				else {
+					F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((next - cur));
+				}
+				if (p == apply_to_size - 2) {
+					F[2 * mesh.map_node_numeration.at(apply_to[p + 1])] += data[0] * std::abs((next - cur));
+				}
+			}
+		}
+		if (std::abs(data[1]) > 1e-8) {
+			std::map<double, int> y_side;
+			for (int p = 0; p < apply_to_size; p++) {
+				y_side[mesh.nodes[mesh.map_node_numeration.at(apply_to[p])].x] = p;
+			}
+			auto find_by_value = [&y_side](int target) {
+				for (const auto& [key, value] : y_side)
+					if (value == target)
+						return key;
+				};
+
+			for (int p = 0; p < apply_to_size - 1; p++) {
+				auto cur = find_by_value(p);
+				auto next = find_by_value(p + 1);
+				if (p == 0) {
+					F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((next - cur));
+				}
+				else {
+					F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((next - cur));
+				}
+				if (p == apply_to_size - 2) {
+					F[2 * mesh.map_node_numeration.at(apply_to[p + 1]) + 1] += data[1] * std::abs((next - cur)) / 2;
+				}
 			}
 		}
 	}
