@@ -392,18 +392,18 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 			
 			auto begin0 = find_by_value(0);
 			auto begin1 = find_by_value(1);
-			F[2 * mesh.map_node_numeration.at(apply_to[0])] += data[0] * std::abs((begin0 - begin1));
+			F[2 * mesh.map_node_numeration.at(apply_to[0])] += data[0] * std::abs((begin0 - begin1)) * 4;
 
 			for(int p = 1; p < apply_to_size - 1; p++) {
 				auto prev = find_by_value(p - 1);
 				auto cur  = find_by_value(p);
 				auto next = find_by_value(p + 1);
-				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((next - cur));
-				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((prev - cur));
+				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((next - cur)) * 2;
+				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((prev - cur)) * 2;
 			}
 			auto end0 = find_by_value(apply_to_size - 2);
 			auto end1 = find_by_value(apply_to_size - 1);
-			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1])] += data[0] * std::abs((end0 - end1));
+			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1])] += data[0] * std::abs((end0 - end1)) * 4;
 
 		}
 		if (std::abs(data[1]) > 1e-8) {
@@ -420,18 +420,18 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 
 			auto begin0 = find_by_value(0);
 			auto begin1 = find_by_value(1);
-			F[2 * mesh.map_node_numeration.at(apply_to[0]) + 1] += data[1] * std::abs((begin0 - begin1));
+			F[2 * mesh.map_node_numeration.at(apply_to[0]) + 1] += data[1] * std::abs((begin0 - begin1)) * 4;
 
 			for (int p = 1; p < apply_to_size - 1; p++) {
 				auto prev = find_by_value(p - 1);
 				auto cur = find_by_value(p);
 				auto next = find_by_value(p + 1);
-				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((next - cur));
-				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((prev - cur));
+				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((next - cur)) * 2;
+				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((prev - cur)) * 2;
 			}
 			auto end0 = find_by_value(apply_to_size - 2);
 			auto end1 = find_by_value(apply_to_size - 1);
-			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1]) + 1] += data[1] * std::abs((end0 - end1));
+			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1]) + 1] += data[1] * std::abs((end0 - end1)) * 4;
 		}
 	}
 }
