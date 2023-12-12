@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include "mkl.h"
+#include <cmath>
 using json = nlohmann::json;
 
 struct material_t

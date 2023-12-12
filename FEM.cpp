@@ -1,6 +1,5 @@
 #include "FEM.hpp"
 
-
 void read_dimensions(const json& fc, int& dim) {
 	if (fc["settings"]["dimensions"] == "2D") {
 		dim = 2;
@@ -344,10 +343,6 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 void createLoads(const int& dim, const json& fc, std::vector<double>& F, const UnstructedMesh& mesh) {
 	F.resize(dim * mesh.nodes.size());
 	for (auto& load : fc["loads"]) {
-		if (load["name"] != "Force" || load["type"] != 5) {
-			throw std::runtime_error("not Force load. Not supported yet");
-		}
-
 		auto get_load_data = [&load](std::string const& key, size_t* out_size = nullptr) -> char*
 			{
 				std::string data64 = load[key];
@@ -359,26 +354,73 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 
 				return data;
 			};
-		size_t apply_to_size = load["apply_to_size"];
+		if (load["name"] == "Force" && load["type"] == 5) {
+			
+			size_t apply_to_size = load["apply_to_size"];
 
-		int* apply_to_raw = reinterpret_cast<int*>(get_load_data("apply_to"));
-		std::vector<int> apply_to(apply_to_raw, apply_to_raw + apply_to_size);
-		free(apply_to_raw);
-
-		std::vector<double> data(6);
-		for (int i = 0; i < 6; i++) {
-			std::string data_b64 = load["data"][i];
-			b64decode_host(data_b64.data(), data_b64.size(), reinterpret_cast<char*>(&(data[i])));
-		}
-
-		/*for (int& node : apply_to) {
-			for (int i = 0; i < 2; i++) {
-				F[2 * mesh.map_node_numeration.at(node) + i] += data[i];
+			int* apply_to_raw = reinterpret_cast<int*>(get_load_data("apply_to"));
+			std::vector<int> apply_to(apply_to_raw, apply_to_raw + apply_to_size);
+			free(apply_to_raw);
+			std::vector<double> data(6);
+			for (int i = 0; i < 6; i++) {
+				std::string data_b64 = load["data"][i];
+				b64decode_host(data_b64.data(), data_b64.size(), reinterpret_cast<char*>(&(data[i])));
 			}
-		}*/
 
+			for (int& node : apply_to) {
+				for (int i = 0; i < 2; i++) {
+					F[2 * mesh.map_node_numeration.at(node) + i] += data[i];
+				}
+			}
+		}		
 
-		if (std::abs(data[0]) > 1e-8 ) {
+		else if (load["name"] == "Pressure" && load["type"] == 4) {
+			size_t apply_to_size = load["apply_to_size"];
+
+			int* apply_to_raw = reinterpret_cast<int*>(get_load_data("apply_to"));
+			std::vector<int> apply_to(apply_to_raw, apply_to_raw + 2 * apply_to_size);
+			free(apply_to_raw);
+
+			std::string data_b64 = load["data"][0];
+			double data;
+			b64decode_host(data_b64.data(), data_b64.size(), reinterpret_cast<char*>(&data));
+			for (int p = 0; p < apply_to_size; p++) {
+				int elem = 2 * p;
+				int edge = 2 * p + 1;
+				int shift1 = apply_to[edge];
+				int shift2 = (apply_to[edge] + 1) % 3;
+				int shift3 = (apply_to[edge] + 2) % 3;
+
+				int i = mesh.elems[mesh.nodes_per_elem[apply_to[elem] - 1] + shift1] - 1;
+				int j = mesh.elems[mesh.nodes_per_elem[apply_to[elem] - 1] + shift2] - 1;
+				int k = mesh.elems[mesh.nodes_per_elem[apply_to[elem] - 1] + shift3] - 1;
+
+				double nx = -(mesh.nodes[j].y - mesh.nodes[i].y);
+				double ny = mesh.nodes[j].x - mesh.nodes[i].x;
+
+				if (nx * (mesh.nodes[k].x - mesh.nodes[i].x) + ny * (mesh.nodes[k].y - mesh.nodes[i].y) < 0) {
+					double tmp = nx;
+					nx = -ny;
+					ny = tmp;
+				}
+				double len = std::sqrt(nx * nx + ny * ny);
+				nx /= len;
+				ny /= len;
+
+				F[2 * i + 0] += data * nx * len / 2;
+				F[2 * i + 1] += data * ny * len / 2;
+
+				F[2 * j + 0] += data * nx * len / 2;
+				F[2 * j + 1] += data * ny * len / 2;
+			}
+		}
+		else {
+			throw std::runtime_error("not Force or Pressure load. Not supported yet");
+		}
+		
+
+		// Force to pressure
+		/*if (std::abs(data[0]) > 1e-8 ) {
 			std::map<double, int> x_side;
 			for (int p = 0; p < apply_to_size; p++) {
 				x_side[mesh.nodes[mesh.map_node_numeration.at(apply_to[p])].y] = p;
@@ -392,18 +434,18 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 			
 			auto begin0 = find_by_value(0);
 			auto begin1 = find_by_value(1);
-			F[2 * mesh.map_node_numeration.at(apply_to[0])] += data[0] * std::abs((begin0 - begin1)) * 4;
+			F[2 * mesh.map_node_numeration.at(apply_to[0])] += data[0] * std::abs((begin0 - begin1)) / 2 ;
 
 			for(int p = 1; p < apply_to_size - 1; p++) {
 				auto prev = find_by_value(p - 1);
 				auto cur  = find_by_value(p);
 				auto next = find_by_value(p + 1);
-				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((next - cur)) * 2;
-				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((prev - cur)) * 2;
+				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((next - cur)) / 2;
+				F[2 * mesh.map_node_numeration.at(apply_to[p])] += data[0] * std::abs((prev - cur)) / 2;
 			}
 			auto end0 = find_by_value(apply_to_size - 2);
 			auto end1 = find_by_value(apply_to_size - 1);
-			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1])] += data[0] * std::abs((end0 - end1)) * 4;
+			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1])] += data[0] * std::abs((end0 - end1)) / 2;
 
 		}
 		if (std::abs(data[1]) > 1e-8) {
@@ -413,27 +455,27 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 			}
 			auto find_by_value = [&y_side](int target) {
 				for (const auto& [key, value] : y_side)
-					if (value == target)
+					if (value == target)	
 						return key;
 				};
 
 
 			auto begin0 = find_by_value(0);
 			auto begin1 = find_by_value(1);
-			F[2 * mesh.map_node_numeration.at(apply_to[0]) + 1] += data[1] * std::abs((begin0 - begin1)) * 4;
+			F[2 * mesh.map_node_numeration.at(apply_to[0]) + 1] += data[1] * std::abs((begin0 - begin1)) / 2;
 
 			for (int p = 1; p < apply_to_size - 1; p++) {
 				auto prev = find_by_value(p - 1);
 				auto cur = find_by_value(p);
 				auto next = find_by_value(p + 1);
-				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((next - cur)) * 2;
-				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((prev - cur)) * 2;
+				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((next - cur)) / 2;
+				F[2 * mesh.map_node_numeration.at(apply_to[p]) + 1] += data[1] * std::abs((prev - cur)) / 2;
 			}
 			auto end0 = find_by_value(apply_to_size - 2);
 			auto end1 = find_by_value(apply_to_size - 1);
-			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1]) + 1] += data[1] * std::abs((end0 - end1)) * 4;
+			F[2 * mesh.map_node_numeration.at(apply_to[apply_to_size - 1]) + 1] += data[1] * std::abs((end0 - end1)) / 2;
 		}
-	}
+	*/}
 }
 
 void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, std::vector<double>& F, const UnstructedMesh& mesh) {
@@ -738,7 +780,7 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 		CBLAS_TRANSPOSE trans = CblasTrans;
 		const double alpha = 1.0;
 		const double beta = 0.0;
-		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, alpha, D, Ddim, B, Brows, beta, Z, Ddim);
+		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, 1/(2*S), D, Ddim, B, Brows, beta, Z, Ddim);
 		cblas_dgemm(layout, nontrans, nontrans, Ddim, 1, Bcols, alpha, Z, Ddim, u, Bcols, beta, sigma_loc, Brows);
 		
 		int i1 = -1;
