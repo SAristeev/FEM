@@ -11,6 +11,7 @@
 #include <string>
 #include "mkl.h"
 #include <cmath>
+#include <span>
 using json = nlohmann::json;
 
 struct material_t
@@ -47,7 +48,7 @@ void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<
 void solve(const int& dim, const std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, const std::vector<double>& F, std::vector<double>& x);
 void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<MKL_INT>& rows, std::vector<MKL_INT>& cols);
 void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t mat, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols);
-void resultants(const int& dim, material_t material, std::vector<double>& sigma, const std::vector<double>& x, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols);
+void resultants(const int& dim, material_t material, std::vector<double>& eps, std::vector<double>& sigma, const std::vector<double>& x, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols);
 
 
 #endif // !__FEM_HPP__

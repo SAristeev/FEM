@@ -163,13 +163,11 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 	size_t n = rows.size() - 1;
 	size_t nnz = rows[n];
 
-
 	double* raw_K = reinterpret_cast<double*>(malloc(blocksize * blocksize * nnz * sizeof(double)));
 	for (int i = 0; i < nnz * blocksize * blocksize; i++) {
 		raw_K[i] = 0.0;
 	}
-	//std::memset(raw_K, 0.0, blocksize * blocksize * nnz * sizeof(double));
-
+	
 	// D matrix	
 	int Ddim = 3;
 
@@ -200,7 +198,7 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 		std::vector<int> ijk = { mesh.elems[mesh.nodes_per_elem[e] + 0] - 1,
 									mesh.elems[mesh.nodes_per_elem[e] + 1] - 1,
 									mesh.elems[mesh.nodes_per_elem[e] + 2] - 1 };
-		std::sort(ijk.begin(), ijk.end());
+		//std::sort(ijk.begin(), ijk.end());
 
 		int i = ijk[0];
 		int j = ijk[1];
@@ -208,7 +206,7 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 
 		double S = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
 			(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y)) / 2;
-		double delta = S;
+		
 		B[0] = mesh.nodes[j].y - mesh.nodes[k].y;
 		B[1] = 0;
 		B[2] = mesh.nodes[k].x - mesh.nodes[j].x;
@@ -233,13 +231,12 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 		B[16] = mesh.nodes[j].x - mesh.nodes[i].x;
 		B[17] = mesh.nodes[i].y - mesh.nodes[j].y;
 	
-		S = 1.0 / (2 * S);
 		CBLAS_LAYOUT layout = CblasColMajor;
 		CBLAS_TRANSPOSE nontrans = CblasNoTrans;
 		CBLAS_TRANSPOSE trans = CblasTrans;
 		const double beta = 0.0;
-		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, S, D, Ddim, B, Brows, beta, Z, Ddim);
-		cblas_dgemm(layout, trans, nontrans, Bcols, Bcols, Ddim, delta * S, B, Ddim, Z, Brows, beta, A, Bcols);
+		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, 1.0 / (2 * S), D, Ddim, B, Brows, beta, Z, Ddim);
+		cblas_dgemm(layout, trans, nontrans, Bcols, Bcols, Ddim, 0.5, B, Ddim, Z, Brows, beta, A, Bcols);
 		
 		int i1 = -1;
 		int j1 = -1;
@@ -680,34 +677,28 @@ void solve(const int& dim, const std::vector<double>& K, const std::vector<MKL_I
 	mkl_free_buffers();
 }
 
-void resultants(const int& dim, material_t material, std::vector<double>& sigma, const std::vector<double>& x, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols) {
+void resultants(const int& dim, material_t material, std::vector<double>& eps, std::vector<double>& sigma, const std::vector<double>& x, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols) {
 	if (dim != 2) {
 		throw std::runtime_error("resultants: try to solve non 2D task");
 	}
 	int blocksize = dim;
 	size_t n = rows.size() - 1;
 	size_t nnz = rows[n];
-
-	double* C = reinterpret_cast<double*>(malloc(nnz * sizeof(double)));
+	size_t elems_size = mesh.elemids.size();
+	
+	std::span<double> C(reinterpret_cast<double*>(malloc(nnz * sizeof(double))), nnz);
 	for (int i = 0; i < nnz; i++) {
 		C[i] = 0.0;
 	}
-	double* b = reinterpret_cast<double*>(malloc(n * sizeof(double)));
-	for (int i = 0; i < n; i++) {
+	std::span<double> b(reinterpret_cast<double*>(malloc(6 * n * sizeof(double))), 6 * n);
+	for (int i = 0; i < 6 * n; i++) {
 		b[i] = 0.0;
 	}
-	sigma.resize(n);
-	double* sigma_ = sigma.data();
-	for (int i = 0; i < n; i++) {
-		sigma_[i] = 0.0;
-	}
 
-	//std::memset(raw_K, 0.0, blocksize * blocksize * nnz * sizeof(double));
-	
 	// D matrix	
 	int Ddim = 3;
 
-	double* D = reinterpret_cast<double*>(malloc(Ddim * Ddim * sizeof(double)));
+	std::span<double> D(reinterpret_cast<double*>(malloc(Ddim * Ddim * sizeof(double))), Ddim * Ddim);
 
 	// filling D
 	fp::fp_t E = material.E;
@@ -726,23 +717,25 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 	// only if Tri
 	int Brows = 3;
 	int Bcols = 6;
-	double* B = reinterpret_cast<double*>(malloc(Brows * Bcols * sizeof(double)));
-	double* Z = reinterpret_cast<double*>(malloc(Ddim * Bcols * sizeof(double)));
-	double* u = reinterpret_cast<double*>(malloc(Bcols * sizeof(double)));
-	double* sigma_loc = reinterpret_cast<double*>(malloc(Brows * sizeof(double)));
-	for (int e = 0; e < mesh.elemids.size(); e++) {
+	std::span<double> B(reinterpret_cast<double*>(malloc(Brows * Bcols * sizeof(double))), Brows * Bcols);
+	std::span<double> u(reinterpret_cast<double*>(malloc(Bcols * sizeof(double))), Bcols);
+	std::span<double> sigma_loc(reinterpret_cast<double*>(malloc(Brows * sizeof(double))), Brows);
+	std::span<double> eps_loc(reinterpret_cast<double*>(malloc(Brows * sizeof(double))), Brows);
+	for (int e = 0; e < elems_size; e++) {
+		std::fill(sigma_loc.begin(), sigma_loc.end(), 0.0);
+		std::fill(eps_loc.begin(), eps_loc.end(), 0.0);
 		std::vector<int> ijk = { mesh.elems[mesh.nodes_per_elem[e] + 0] - 1,
 									mesh.elems[mesh.nodes_per_elem[e] + 1] - 1,
 									mesh.elems[mesh.nodes_per_elem[e] + 2] - 1 };
-		std::sort(ijk.begin(), ijk.end());
+		//std::sort(ijk.begin(), ijk.end());
 
 		int i = ijk[0];
 		int j = ijk[1];
 		int k = ijk[2];
-		double J = (mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
-			(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y);
+		double J = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
+			(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y));
 
-		double S = std::abs(J) / 2.0;
+		double S = J / 2.0;
 
 		B[0] = mesh.nodes[j].y - mesh.nodes[k].y;
 		B[1] = 0;
@@ -780,9 +773,10 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 		CBLAS_TRANSPOSE trans = CblasTrans;
 		const double alpha = 1.0;
 		const double beta = 0.0;
-		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, 1/(2*S), D, Ddim, B, Brows, beta, Z, Ddim);
-		cblas_dgemm(layout, nontrans, nontrans, Ddim, 1, Bcols, alpha, Z, Ddim, u, Bcols, beta, sigma_loc, Brows);
-		
+		cblas_dgemv(layout, nontrans, Brows, Bcols, 1 / (2 * S), B.data(), Brows, u.data(), 1, beta, eps_loc.data(), 1);
+		eps_loc[2] /= 2;
+		cblas_dgemv(layout, nontrans, Ddim, Ddim, alpha, D.data(), Ddim, eps_loc.data(), 1, beta, sigma_loc.data(), 1);
+		sigma_loc[2] *= 2;
 		int i1 = -1;
 		int j1 = -1;
 		int k1 = -1;
@@ -798,11 +792,18 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 				k1 = q;
 			}
 		}
-		C[i1] = J / 12.0;
-		C[j1] = J / 24.0;
-		C[k1] = J / 24.0;
-		b[i] += J * sigma_loc[0] / 6.0;
+		C[i1] += J / 12.0;
+		C[j1] += J / 24.0;
+		C[k1] += J / 24.0;
+		
+		b[i + 0 * n] += J * eps_loc[0] / 6.0;
+		b[i + 1 * n] += J * eps_loc[1] / 6.0;
+		b[i + 2 * n] += J * eps_loc[2] / 6.0;
 
+		b[i + 3 * n] += J * sigma_loc[0] / 6.0;
+		b[i + 4 * n] += J * sigma_loc[1] / 6.0;
+		b[i + 5 * n] += J * sigma_loc[2] / 6.0;
+		
 		int i2 = -1;
 		int j2 = -1;
 		int k2 = -1;
@@ -818,11 +819,18 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 				k2 = q;
 			}
 		}
-		C[i2] = J / 24.0;
-		C[j2] = J / 12.0;
-		C[k2] = J / 24.0;
-		b[j] += J * sigma_loc[1] / 6.0;
+		C[i2] += J / 24.0;
+		C[j2] += J / 12.0;
+		C[k2] += J / 24.0;
+		
+		b[j + 0 * n] += J * eps_loc[0] / 6.0;
+		b[j + 1 * n] += J * eps_loc[1] / 6.0;
+		b[j + 2 * n] += J * eps_loc[2] / 6.0;
 
+		b[j + 3 * n] += J * sigma_loc[0] / 6.0;
+		b[j + 4 * n] += J * sigma_loc[1] / 6.0;
+		b[j + 5 * n] += J * sigma_loc[2] / 6.0;
+		
 		int i3 = -1;
 		int j3 = -1;
 		int k3 = -1;
@@ -838,10 +846,18 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 				k3 = q;
 			}
 		}
-		C[i3] = J / 24.0;
-		C[j3] = J / 24.0;
-		C[k3] = J / 12.0;
-		b[k] += J * sigma_loc[2] / 6.0;
+		C[i3] += J / 24.0;
+		C[j3] += J / 24.0;
+		C[k3] += J / 12.0;
+
+		b[k + 0 * n] += J * eps_loc[0] / 6.0;
+		b[k + 1 * n] += J * eps_loc[1] / 6.0;
+		b[k + 2 * n] += J * eps_loc[2] / 6.0;
+		
+		b[k + 3 * n] += J * sigma_loc[0] / 6.0;
+		b[k + 4 * n] += J * sigma_loc[1] / 6.0;
+		b[k + 5 * n] += J * sigma_loc[2] / 6.0;
+
 	}
 	
 
@@ -865,7 +881,7 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 	_iparm[7] = 2; /* Max numbers of iterative refinement steps */
 	_iparm[8] = 0; /* Not in use */
 	_iparm[11] = 0; /* Not in use */
-	if (1) { // sym by default
+	if (0) { // sym by default
 		_iparm[9] = 8;
 		_iparm[10] = 0; /* Disable scaling. Default for symmetric indefinite matrices. */
 		_iparm[12] = 0; /* Maximum weighted matching algorithm is switched-off (default for symmetric). Try iparm[12] = 1 in case of inappropriate accuracy */
@@ -901,11 +917,12 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 
 	const MKL_INT* h_RowsA = rows.data();
 	const MKL_INT* h_ColsA = cols.data();
-	const double* h_ValsA = C;
+	const double* h_ValsA = C.data();
 
-	const double* h_b = b;
-	double* h_x = sigma_;
-	MKL_INT nrhs = 1;
+	const double* h_b = b.data();
+	std::span<double> x_(reinterpret_cast<double*>(malloc(6 * n * sizeof(double))), 6 * n);
+	double* h_x = x_.data();
+	MKL_INT nrhs = 6;
 	double ddum = 0.0;
 	MKL_INT maxfct = 1;
 	MKL_INT msglvl = 0;
@@ -942,13 +959,24 @@ void resultants(const int& dim, material_t material, std::vector<double>& sigma,
 	mkl_free_buffers();
 
 
-	free(C);
-	free(b);
+	eps.resize(3 * n);
+	sigma.resize(3 * n);
+	for (int i = 0; i < n; i++) {
+		eps[3 * i + 0] = h_x[i + 0 * n];
+		eps[3 * i + 1] = h_x[i + 1 * n];
+		eps[3 * i + 2] = h_x[i + 2 * n];
 
-	free(D);
-	free(B);
-	free(Z);
-	free(u);
-	free(sigma_loc);
+		sigma[3 * i + 0] = h_x[i + 3 * n];
+		sigma[3 * i + 1] = h_x[i + 4 * n];
+		sigma[3 * i + 2] = h_x[i + 5 * n];
+	}
+	//eps = std::vector(h_x, h_x + 1 * n);
+	//sigma = std::vector(h_x + 3 * n, h_x + 6 * n);
+	free(C.data());
+	free(b.data());
+	free(D.data());
+	free(B.data());
+	free(u.data());
+	free(sigma_loc.data());
 
 }
