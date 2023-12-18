@@ -79,8 +79,9 @@ int main(int argc, char* argv[]) {
     std::span<double> F;
     createLoads(dim, fc, F, mesh);
     applyconstraints(fc, K, rows, cols, F, mesh);
-    std::span<double> x;
-    solve(dim, K, rows, cols, F, x);
+    std::span<double> x(reinterpret_cast<double*>(malloc(F.size() * sizeof(double))), F.size());
+    std::fill(x.begin(), x.end(), 0);
+    solve(dim, K, rows, cols, 1, F, x);
     
     {
         std::span<double> eps;

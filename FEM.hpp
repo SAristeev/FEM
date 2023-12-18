@@ -45,7 +45,7 @@ void read_mesh(const json& fc, UnstructedMesh& mesh);
 
 void createLoads(const int& dim, const json& fc, std::span<double>& F, const UnstructedMesh& mesh);
 void applyconstraints(const json& fc, std::span<double>& K, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols, std::span<double>& F, const UnstructedMesh& mesh);
-void solve(const int& dim, const std::span<double>& K, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols, const std::span<double>& F, std::span<double>& x);
+void solve(const MKL_INT& blocksize, const std::span<double>& A, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols, const MKL_INT& nrhs, const std::span<double>& b, std::span<double>& x);
 void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::span<MKL_INT>& rows, std::span<MKL_INT>& cols);
 void buildFullGlobalMatrix(const int& dim, std::span<double>& K, material_t mat, const UnstructedMesh& mesh, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols);
 void resultants(const int& dim, material_t material, std::span<double>& eps, std::span<double>& sigma, const std::span<double>& x, const UnstructedMesh& mesh, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols);
