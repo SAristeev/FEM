@@ -69,46 +69,11 @@ int main(int argc, char* argv[]) {
     applyconstraints(fc, K, rows, cols, F, mesh);
     std::vector<double> x;
     solve(dim, K, rows, cols, F, x);
-    if (0){
-        std::cout << "K" << std::endl;
-        for (int i = 0; i < K.size(); ++i) {
-        
-            std::cout << std::scientific << K[i] << ", ";
-        }
-        std::cout << std::endl;
-        std::cout << "cols" << std::endl;    
-        for (int i = 0; i < cols.size(); ++i) {
-            std::cout << cols[i] << ", ";
-        }
-        std::cout << std::endl;
-        std::cout << "rows" << std::endl;
-        for (int i = 0; i < rows.size(); ++i) {
-            std::cout << rows[i] << ", ";
-        }
-        std::cout << std::endl;
-    }
-    if (0) {
-        for (int i = 0; i < F.size(); ++i) {
-            std::cout << "f(" << i << ") = " << F[i] << ", x(" << i << ") = "  << x[i] << "\n";
-        }
-    }
-    std::vector<double> eps;
-    std::vector<double> sigma;
-    std::vector<double> eps_e;
-    std::vector<double> sigma_e;
-    std::vector<double> test;
-    int e = mesh.elemids.size();
-    test.resize(2 * e);
-    for (int i = 0; i < 2 * e; i++) {
-        if (i < e) {
-            test[i] = 1;
-        }
-        else {
-            test[i] = 2;
-        }
-    }
-    resultants(dim, materials[0], eps, sigma, x, mesh, rows, cols);
+    
     {
+        std::vector<double> eps;
+        std::vector<double> sigma;
+        resultants(dim, materials[0], eps, sigma, x, mesh, rows, cols);
         std::vector<vtu::spatial_data_t> p_data;
         p_data.emplace_back(x.data(), "Displacement", 2);
         p_data.emplace_back(F.data(), "External Force", 2);

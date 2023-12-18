@@ -132,8 +132,9 @@ void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<MKL_INT
 	int offset = 0;
 	for (int elem_id = 0; elem_id < elems_size; elem_id++) {
 		for (int nodei = 0; nodei < mesh.nodes_per_elem[elem_id + 1] - mesh.nodes_per_elem[elem_id]; nodei++) {
-			for (int nodej = 0; nodej < mesh.nodes_per_elem[elem_id + 1] - mesh.nodes_per_elem[elem_id]; nodej++)
-				coostruct.insert({ mesh.elems[offset + nodei], mesh.elems[offset + nodej] });
+			for (int nodej = 0; nodej < mesh.nodes_per_elem[elem_id + 1] - mesh.nodes_per_elem[elem_id]; nodej++){
+				coostruct.insert({ mesh.map_node_numeration.at(mesh.elems[offset + nodei]), mesh.map_node_numeration.at(mesh.elems[offset + nodej]) });
+			}
 		}
 		offset += mesh.nodes_per_elem[elem_id + 1] - mesh.nodes_per_elem[elem_id];
 	}
@@ -145,10 +146,10 @@ void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<MKL_INT
 
 	for (auto x : coostruct) {
 		// zero based indexing
-		if (x.first == currow + 2) {
+		if (x.first == currow + 1) {
 			rows[++currow] = curnnz;
 		}
-		cols[curnnz] = x.second - 1;
+		cols[curnnz] = x.second;
 		curnnz++;
 	}
 	rows[++currow] = curnnz;
@@ -195,14 +196,18 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 	double* Z = reinterpret_cast<double*>(malloc(Ddim * Bcols * sizeof(double)));
 
 	for (int e = 0; e < mesh.elemids.size(); e++) {
-		std::vector<int> ijk = { mesh.elems[mesh.nodes_per_elem[e] + 0] - 1,
-									mesh.elems[mesh.nodes_per_elem[e] + 1] - 1,
-									mesh.elems[mesh.nodes_per_elem[e] + 2] - 1 };
-		//std::sort(ijk.begin(), ijk.end());
+		int i = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 0]);
+		int j = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 1]);
+		int k = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 2]);
 
-		int i = ijk[0];
-		int j = ijk[1];
-		int k = ijk[2];
+		//std::vector<int> ijk = { mesh.elems[mesh.nodes_per_elem[e] + 0] - 1,
+		//							mesh.elems[mesh.nodes_per_elem[e] + 1] - 1,
+		//							mesh.elems[mesh.nodes_per_elem[e] + 2] - 1 };
+		////std::sort(ijk.begin(), ijk.end());
+
+		//int i = ijk[0];
+		//int j = ijk[1];
+		//int k = ijk[2];
 
 		double S = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
 			(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y)) / 2;
@@ -388,9 +393,9 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 				int shift2 = (apply_to[edge] + 1) % 3;
 				int shift3 = (apply_to[edge] + 2) % 3;
 
-				int i = mesh.elems[mesh.nodes_per_elem[apply_to[elem] - 1] + shift1] - 1;
-				int j = mesh.elems[mesh.nodes_per_elem[apply_to[elem] - 1] + shift2] - 1;
-				int k = mesh.elems[mesh.nodes_per_elem[apply_to[elem] - 1] + shift3] - 1;
+				int i = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[apply_to[elem] - 1] + shift1]);
+				int j = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[apply_to[elem] - 1] + shift2]);
+				int k = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[apply_to[elem] - 1] + shift3]);
 
 				double nx = -(mesh.nodes[j].y - mesh.nodes[i].y);
 				double ny = mesh.nodes[j].x - mesh.nodes[i].x;
@@ -724,14 +729,20 @@ void resultants(const int& dim, material_t material, std::vector<double>& eps, s
 	for (int e = 0; e < elems_size; e++) {
 		std::fill(sigma_loc.begin(), sigma_loc.end(), 0.0);
 		std::fill(eps_loc.begin(), eps_loc.end(), 0.0);
-		std::vector<int> ijk = { mesh.elems[mesh.nodes_per_elem[e] + 0] - 1,
-									mesh.elems[mesh.nodes_per_elem[e] + 1] - 1,
-									mesh.elems[mesh.nodes_per_elem[e] + 2] - 1 };
-		//std::sort(ijk.begin(), ijk.end());
+		//std::vector<int> ijk = { mesh.elems[mesh.nodes_per_elem[e] + 0] - 1,
+		//							mesh.elems[mesh.nodes_per_elem[e] + 1] - 1,
+		//							mesh.elems[mesh.nodes_per_elem[e] + 2] - 1 };
+		////std::sort(ijk.begin(), ijk.end());
 
-		int i = ijk[0];
-		int j = ijk[1];
-		int k = ijk[2];
+		//int i = ijk[0];
+		//int j = ijk[1];
+		//int k = ijk[2];
+		
+		int i = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 0]);
+		int j = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 1]);
+		int k = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 2]);
+
+		
 		double J = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
 			(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y));
 
@@ -970,8 +981,6 @@ void resultants(const int& dim, material_t material, std::vector<double>& eps, s
 		sigma[3 * i + 1] = h_x[i + 4 * n];
 		sigma[3 * i + 2] = h_x[i + 5 * n];
 	}
-	//eps = std::vector(h_x, h_x + 1 * n);
-	//sigma = std::vector(h_x + 3 * n, h_x + 6 * n);
 	free(C.data());
 	free(b.data());
 	free(D.data());
