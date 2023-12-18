@@ -18,22 +18,34 @@ int main(int argc, char* argv[]) {
             parsed_params.insert(std::make_pair(key, std::string()));
         }
     }
-    std::string FileName;
+    
+    std::string FC_FileName;
     {
         const auto it = parsed_params.find("--fc");
         if (it != parsed_params.end() && !it->second.empty()) {
-            FileName = it->second;
+            FC_FileName = it->second;
             parsed_params.erase(it);
         }
         else {
             printf("ERROR: Path to fc is not provided!\n");
         }
+    }
 
+    std::string VTU_FileName;
+    {
+        const auto it = parsed_params.find("--vtu");
+        if (it != parsed_params.end() && !it->second.empty()) {
+            VTU_FileName = it->second;
+            parsed_params.erase(it);
+        }
+        else {
+            printf("ERROR: Path to vtu is not provided!\n");
+        }
     }
     
-    std::ifstream fc_file(FileName, std::ios::in);
+    std::ifstream fc_file(FC_FileName, std::ios::in);
     if (!fc_file) {
-        throw std::runtime_error("cannot open fc file: " + FileName);
+        throw std::runtime_error("cannot open fc file: " + FC_FileName);
     }
     auto fc = nlohmann::json::parse(fc_file);
     fc_file.close();
@@ -83,7 +95,7 @@ int main(int argc, char* argv[]) {
 
         std::vector<vtu::spatial_data_t> c_data;
 
-        vtu::writer_t writer("abc.vtu", true);
+        vtu::writer_t writer(VTU_FileName, true);
         auto p_cords = std::span<double>{ (double*)mesh.nodes.data(), mesh.nodes.size() * 3 };
         std::vector<int> conn(mesh.elems.size());
         for (int i = 0; i < mesh.elems.size(); i++) {
