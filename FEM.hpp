@@ -43,12 +43,12 @@ void read_materials(const json& fc, std::vector<material_t>& materials, std::map
 void read_blocks(const json& fc, std::map<int, unsigned char>& matid_threshold_map, std::vector<int>& blocks, std::vector<unsigned char>& thresholds, std::map<int, unsigned char>& block_threshold_map);
 void read_mesh(const json& fc, UnstructedMesh& mesh);
 
-void createLoads(const int& dim, const json& fc, std::vector<double>& F, const UnstructedMesh& mesh);
-void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, std::vector<double>& F, const UnstructedMesh& mesh);
-void solve(const int& dim, const std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, const std::vector<double>& F, std::vector<double>& x);
-void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<MKL_INT>& rows, std::vector<MKL_INT>& cols);
-void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t mat, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols);
-void resultants(const int& dim, material_t material, std::vector<double>& eps, std::vector<double>& sigma, const std::vector<double>& x, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols);
+void createLoads(const int& dim, const json& fc, std::span<double>& F, const UnstructedMesh& mesh);
+void applyconstraints(const json& fc, std::span<double>& K, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols, std::span<double>& F, const UnstructedMesh& mesh);
+void solve(const int& dim, const std::span<double>& K, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols, const std::span<double>& F, std::span<double>& x);
+void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::span<MKL_INT>& rows, std::span<MKL_INT>& cols);
+void buildFullGlobalMatrix(const int& dim, std::span<double>& K, material_t mat, const UnstructedMesh& mesh, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols);
+void resultants(const int& dim, material_t material, std::span<double>& eps, std::span<double>& sigma, const std::span<double>& x, const UnstructedMesh& mesh, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols);
 
 
 #endif // !__FEM_HPP__

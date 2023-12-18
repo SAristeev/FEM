@@ -69,22 +69,22 @@ int main(int argc, char* argv[]) {
     UnstructedMesh mesh;
     read_mesh(fc, mesh);
 
-    std::vector<MKL_INT> rows;
-    std::vector<MKL_INT> cols;
+    std::span<MKL_INT> rows;
+    std::span<MKL_INT> cols;
     buildFullGlobalMatrixStruct(mesh, rows, cols);
 
-    std::vector<double> K;
+    std::span<double> K;
     buildFullGlobalMatrix(dim, K, materials[0], mesh, rows, cols);
 
-    std::vector<double> F;
+    std::span<double> F;
     createLoads(dim, fc, F, mesh);
     applyconstraints(fc, K, rows, cols, F, mesh);
-    std::vector<double> x;
+    std::span<double> x;
     solve(dim, K, rows, cols, F, x);
     
     {
-        std::vector<double> eps;
-        std::vector<double> sigma;
+        std::span<double> eps;
+        std::span<double> sigma;
         resultants(dim, materials[0], eps, sigma, x, mesh, rows, cols);
         std::vector<vtu::spatial_data_t> p_data;
         p_data.emplace_back(x.data(), "Displacement", 2);
@@ -102,6 +102,18 @@ int main(int argc, char* argv[]) {
             conn[i] = mesh.map_node_numeration[mesh.elems[i]];
         }
         writer.write(p_cords, conn, mesh.elem_type, p_data, c_data);
+
+        {
+            free(eps.data());
+            free(sigma.data());
+        }
+    }
+    {
+        free(K.data());
+        free(rows.data());
+        free(cols.data());
+        free(x.data());
+        free(F.data());
     }
     return 0;
 }

@@ -121,7 +121,7 @@ void read_mesh(const json& fc, UnstructedMesh& mesh) {
 }
 
 
-void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<MKL_INT>& rows, std::vector<MKL_INT>& cols) {
+void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::span<MKL_INT>& rows, std::span<MKL_INT>& cols) {
 	if (!rows.empty() || !cols.empty()) {
 		throw std::runtime_error("buildFullGlobalMatrixStruct: try to fill non-empty matrix");
 	}
@@ -138,8 +138,9 @@ void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<MKL_INT
 		}
 		offset += mesh.nodes_per_elem[elem_id + 1] - mesh.nodes_per_elem[elem_id];
 	}
-	cols.resize(coostruct.size());
-	rows.resize(n + 1);
+
+	cols = std::span<MKL_INT>(reinterpret_cast<MKL_INT*>(malloc(coostruct.size() * sizeof(MKL_INT))), coostruct.size());
+	rows = std::span<MKL_INT>(reinterpret_cast<MKL_INT*>(malloc((n + 1) * sizeof(MKL_INT))), n + 1);
 
 	int currow = 0;
 	int curnnz = rows[0] = 0;
@@ -156,7 +157,7 @@ void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::vector<MKL_INT
 }
 
 
-void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t material, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols) {
+void buildFullGlobalMatrix(const int& dim, std::span<double>& K, material_t material, const UnstructedMesh& mesh, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols) {
 	if (dim != 2) {
 		throw std::runtime_error("buildFullGlobalMatrix: try to solve non 2D task");
 	}
@@ -164,10 +165,8 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 	size_t n = rows.size() - 1;
 	size_t nnz = rows[n];
 
-	double* raw_K = reinterpret_cast<double*>(malloc(blocksize * blocksize * nnz * sizeof(double)));
-	for (int i = 0; i < nnz * blocksize * blocksize; i++) {
-		raw_K[i] = 0.0;
-	}
+	K = std::span<double>(reinterpret_cast<double*>(malloc(blocksize * blocksize * nnz * sizeof(double))), blocksize * blocksize * nnz);
+	std::fill(K.begin(), K.end(), 0);
 	
 	// D matrix	
 	int Ddim = 3;
@@ -199,15 +198,6 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 		int i = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 0]);
 		int j = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 1]);
 		int k = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 2]);
-
-		//std::vector<int> ijk = { mesh.elems[mesh.nodes_per_elem[e] + 0] - 1,
-		//							mesh.elems[mesh.nodes_per_elem[e] + 1] - 1,
-		//							mesh.elems[mesh.nodes_per_elem[e] + 2] - 1 };
-		////std::sort(ijk.begin(), ijk.end());
-
-		//int i = ijk[0];
-		//int j = ijk[1];
-		//int k = ijk[2];
 
 		double S = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
 			(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y)) / 2;
@@ -258,20 +248,20 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 				k1 = q;
 			}
 		}
-		raw_K[4 * i1 + 0] += A[0 * Bcols + 0];
-		raw_K[4 * i1 + 1] += A[1 * Bcols + 0];
-		raw_K[4 * i1 + 2] += A[0 * Bcols + 1];
-		raw_K[4 * i1 + 3] += A[1 * Bcols + 1];
+		K[4 * i1 + 0] += A[0 * Bcols + 0];
+		K[4 * i1 + 1] += A[1 * Bcols + 0];
+		K[4 * i1 + 2] += A[0 * Bcols + 1];
+		K[4 * i1 + 3] += A[1 * Bcols + 1];
 
-		raw_K[4 * j1 + 0] += A[2 * Bcols + 0];
-		raw_K[4 * j1 + 1] += A[3 * Bcols + 0];
-		raw_K[4 * j1 + 2] += A[2 * Bcols + 1];
-		raw_K[4 * j1 + 3] += A[3 * Bcols + 1];
+		K[4 * j1 + 0] += A[2 * Bcols + 0];
+		K[4 * j1 + 1] += A[3 * Bcols + 0];
+		K[4 * j1 + 2] += A[2 * Bcols + 1];
+		K[4 * j1 + 3] += A[3 * Bcols + 1];
 
-		raw_K[4 * k1 + 0] += A[4 * Bcols + 0];
-		raw_K[4 * k1 + 1] += A[5 * Bcols + 0];
-		raw_K[4 * k1 + 2] += A[4 * Bcols + 1];
-		raw_K[4 * k1 + 3] += A[5 * Bcols + 1];
+		K[4 * k1 + 0] += A[4 * Bcols + 0];
+		K[4 * k1 + 1] += A[5 * Bcols + 0];
+		K[4 * k1 + 2] += A[4 * Bcols + 1];
+		K[4 * k1 + 3] += A[5 * Bcols + 1];
 
 		int i2 = -1;
 		int j2 = -1;
@@ -288,20 +278,20 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 				k2 = q;
 			}
 		}
-		raw_K[4 * i2 + 0] += A[0 * Bcols + 2];
-		raw_K[4 * i2 + 1] += A[1 * Bcols + 2];
-		raw_K[4 * i2 + 2] += A[0 * Bcols + 3];
-		raw_K[4 * i2 + 3] += A[1 * Bcols + 3];
+		K[4 * i2 + 0] += A[0 * Bcols + 2];
+		K[4 * i2 + 1] += A[1 * Bcols + 2];
+		K[4 * i2 + 2] += A[0 * Bcols + 3];
+		K[4 * i2 + 3] += A[1 * Bcols + 3];
 		
-		raw_K[4 * j2 + 0] += A[2 * Bcols + 2];
-		raw_K[4 * j2 + 1] += A[3 * Bcols + 2];
-		raw_K[4 * j2 + 2] += A[2 * Bcols + 3];
-		raw_K[4 * j2 + 3] += A[3 * Bcols + 3];
+		K[4 * j2 + 0] += A[2 * Bcols + 2];
+		K[4 * j2 + 1] += A[3 * Bcols + 2];
+		K[4 * j2 + 2] += A[2 * Bcols + 3];
+		K[4 * j2 + 3] += A[3 * Bcols + 3];
 		
-		raw_K[4 * k2 + 0] += A[4 * Bcols + 2];
-		raw_K[4 * k2 + 1] += A[5 * Bcols + 2];
-		raw_K[4 * k2 + 2] += A[4 * Bcols + 3];
-		raw_K[4 * k2 + 3] += A[5 * Bcols + 3];
+		K[4 * k2 + 0] += A[4 * Bcols + 2];
+		K[4 * k2 + 1] += A[5 * Bcols + 2];
+		K[4 * k2 + 2] += A[4 * Bcols + 3];
+		K[4 * k2 + 3] += A[5 * Bcols + 3];
 
 		int i3 = -1;
 		int j3 = -1;
@@ -318,32 +308,32 @@ void buildFullGlobalMatrix(const int& dim, std::vector<double>& K, material_t ma
 				k3 = q;
 			}
 		}
-		raw_K[4 * i3 + 0] += A[0 * Bcols + 4];
-		raw_K[4 * i3 + 1] += A[1 * Bcols + 4];
-		raw_K[4 * i3 + 2] += A[0 * Bcols + 5];
-		raw_K[4 * i3 + 3] += A[1 * Bcols + 5];
-						 
-		raw_K[4 * j3 + 0] += A[2 * Bcols + 4];
-		raw_K[4 * j3 + 1] += A[3 * Bcols + 4];
-		raw_K[4 * j3 + 2] += A[2 * Bcols + 5];
-		raw_K[4 * j3 + 3] += A[3 * Bcols + 5];
-						 
-		raw_K[4 * k3 + 0] += A[4 * Bcols + 4];
-		raw_K[4 * k3 + 1] += A[5 * Bcols + 4];
-		raw_K[4 * k3 + 2] += A[4 * Bcols + 5];
-		raw_K[4 * k3 + 3] += A[5 * Bcols + 5];
+		K[4 * i3 + 0] += A[0 * Bcols + 4];
+		K[4 * i3 + 1] += A[1 * Bcols + 4];
+		K[4 * i3 + 2] += A[0 * Bcols + 5];
+		K[4 * i3 + 3] += A[1 * Bcols + 5];
+					 
+		K[4 * j3 + 0] += A[2 * Bcols + 4];
+		K[4 * j3 + 1] += A[3 * Bcols + 4];
+		K[4 * j3 + 2] += A[2 * Bcols + 5];
+		K[4 * j3 + 3] += A[3 * Bcols + 5];
+					 
+		K[4 * k3 + 0] += A[4 * Bcols + 4];
+		K[4 * k3 + 1] += A[5 * Bcols + 4];
+		K[4 * k3 + 2] += A[4 * Bcols + 5];
+		K[4 * k3 + 3] += A[5 * Bcols + 5];
 
 	}
-	K = std::vector<double>(raw_K, raw_K + blocksize * blocksize * nnz);
-	free(raw_K);
 	free(B);
 	free(A);
 	free(Z);
 	free(D);
 }
 
-void createLoads(const int& dim, const json& fc, std::vector<double>& F, const UnstructedMesh& mesh) {
-	F.resize(dim * mesh.nodes.size());
+void createLoads(const int& dim, const json& fc, std::span<double>& F, const UnstructedMesh& mesh) {
+	
+	F = std::span<double>(reinterpret_cast<double*>(malloc(dim * mesh.nodes.size() * sizeof(double))), dim * mesh.nodes.size());
+	std::fill(F.begin(), F.end(), 0);
 	for (auto& load : fc["loads"]) {
 		auto get_load_data = [&load](std::string const& key, size_t* out_size = nullptr) -> char*
 			{
@@ -480,7 +470,7 @@ void createLoads(const int& dim, const json& fc, std::vector<double>& F, const U
 	*/}
 }
 
-void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, std::vector<double>& F, const UnstructedMesh& mesh) {
+void applyconstraints(const json& fc, std::span<double>& K, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols, std::span<double>& F, const UnstructedMesh& mesh) {
 
 	auto get_mesh_data = [&fc](std::string const& key, size_t* out_size = nullptr) -> char*
 		{
@@ -582,7 +572,12 @@ void applyconstraints(const json& fc, std::vector<double>& K, const std::vector<
 	}
 }
 
-void solve(const int& dim, const std::vector<double>& K, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols, const std::vector<double>& F, std::vector<double>& x) {
+void solve(const int& dim, const std::span<double>& K, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols, const std::span<double>& F, std::span<double>& x) {
+	MKL_INT n = rows.size() - 1;
+	MKL_INT nnz = rows[n];
+	x = std::span<double>(reinterpret_cast<double*>(malloc(2 * n * sizeof(double))),2 * n);
+	std::fill(x.begin(), x.end(), 0);
+	
 	MKL_INT _iparm[64];
 	void* _pt[64];
 
@@ -636,13 +631,12 @@ void solve(const int& dim, const std::vector<double>& K, const std::vector<MKL_I
 
 
 
-	MKL_INT n = rows.size() - 1;
-	MKL_INT nnz = rows[n];
+	
 
 	const MKL_INT* h_RowsA = rows.data();
 	const MKL_INT* h_ColsA = cols.data();
 	const double* h_ValsA = K.data();
-	x.resize(2*n);
+	
 	const double* h_b = F.data();
 	double* h_x = x.data();
 	MKL_INT nrhs = 1;
@@ -682,7 +676,7 @@ void solve(const int& dim, const std::vector<double>& K, const std::vector<MKL_I
 	mkl_free_buffers();
 }
 
-void resultants(const int& dim, material_t material, std::vector<double>& eps, std::vector<double>& sigma, const std::vector<double>& x, const UnstructedMesh& mesh, const std::vector<MKL_INT>& rows, const std::vector<MKL_INT>& cols) {
+void resultants(const int& dim, material_t material, std::span<double>& eps, std::span<double>& sigma, const std::span<double>& x, const UnstructedMesh& mesh, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols) {
 	if (dim != 2) {
 		throw std::runtime_error("resultants: try to solve non 2D task");
 	}
@@ -970,8 +964,9 @@ void resultants(const int& dim, material_t material, std::vector<double>& eps, s
 	mkl_free_buffers();
 
 
-	eps.resize(3 * n);
-	sigma.resize(3 * n);
+	eps = std::span(reinterpret_cast<double*>(malloc(3 * n * sizeof(double))), 3 * n);
+	sigma = std::span(reinterpret_cast<double*>(malloc(3 * n * sizeof(double))), 3 * n);
+
 	for (int i = 0; i < n; i++) {
 		eps[3 * i + 0] = h_x[i + 0 * n];
 		eps[3 * i + 1] = h_x[i + 1 * n];
