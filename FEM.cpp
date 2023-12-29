@@ -490,14 +490,11 @@ void applyconstraints(const json& fc, std::span<double>& K, const std::span<MKL_
 		int coordinate = -1;
 		for (int i = 0; i < 6; i++) {
 			flag[i] = constraint["flag"][i];
+			if (i == 2 && flag[i] != 0) {
+				std::cout << "Found unsupported Z-coord constraint. Ignore " << std::endl;
+			}
 			if (i >= 3 && flag[i] != 0) {
-				throw std::runtime_error("constraints at pivot. Not supported yet");
-			}
-			else if (coordinate == -1 && flag[i] == 1) {
-				coordinate = i;
-			}
-			else if (coordinate != -1 && flag[i] != 0) {
-				throw std::runtime_error("constraints at 2 or many coord. Not supported yet");
+				std::cout << "Found unsupported pivot constraint. Ignore " << std::endl;
 			}
 		}
 		size_t apply_to_size = constraint["apply_to_size"];
