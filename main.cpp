@@ -1,7 +1,7 @@
 #include "FEM.hpp"
 #include "vtu_writer/include/vtu_writer.h"
 int main(int argc, char* argv[]) {
-
+    tbb::tick_count start = tbb::tick_count::now();
     std::unordered_map<std::string, std::string>  parsed_params;//in the pair {key,param} param may be empty
 
     for (int pos = 1; pos < argc; ++pos) {
@@ -116,5 +116,8 @@ int main(int argc, char* argv[]) {
         free(x.data());
         free(F.data());
     }
+    tbb::tick_count end = tbb::tick_count::now();
+
+    std::cout << (end - start).seconds() << std::endl;
     return 0;
 }

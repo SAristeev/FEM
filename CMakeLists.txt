@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 find_package(MKL CONFIG REQUIRED PATHS $ENV{MKLROOT})
+find_package(TBB CONFIG REQUIRED PATHS $ENV{MKLROOT})
 
 add_subdirectory(vtu_writer)
 
@@ -18,4 +19,5 @@ add_executable(FEM
 )
 
 target_link_libraries(FEM PUBLIC MKL::MKL)
+target_link_libraries(FEM PUBLIC TBB::tbb)
 target_link_libraries(FEM PUBLIC vtu_writer)
