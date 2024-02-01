@@ -10,6 +10,8 @@
 #include <vector>
 #include <string>
 #include "mkl.h"
+#include <tbb/tick_count.h>
+#include <tbb/parallel_for.h>
 #include <cmath>
 #include <span>
 using json = nlohmann::json;
