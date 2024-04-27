@@ -146,9 +146,10 @@ void vtu::writer_t::write_file(
 	out_file.map(m_filename, total_offset + 10'000 + 1000 * (p_data.size() + c_data.size()));
 
 	auto write_spatial_data = [&](std::vector<spatial_data_t> const& datas, std::vector<append_data_block_t> const& blocks) -> void {
-		for (std::tuple<spatial_data_t const&, append_data_block_t const&> e : std::views::zip(datas, blocks))
+		assert(datas.size() == blocks.size());
+		for (size_t i = 0; i < datas.size(); i++)
 		{
-			spatial_data_t const& data = std::get<0>(e);
+			spatial_data_t const& data = datas[i];
 
 			out_file << "        <DataArray type=\"" << data.type_name() << "\" Name=\"" << data.name() << "\" ";
 
@@ -161,7 +162,7 @@ void vtu::writer_t::write_file(
 						out_file << "ComponentName" << std::to_string(i) << "=\"" << data.component_name(i) << "\" ";
 			}
 
-			out_file << "format=\"appended\" offset=\"" << std::to_string(std::get<1>(e).offset()) << "\"/>\n";
+			out_file << "format=\"appended\" offset=\"" << std::to_string(blocks[i].offset()) << "\"/>\n";
 		}
 	};
 
@@ -219,5 +220,6 @@ void vtu::writer_t::write_file(
 	std::ranges::for_each(m_cell_blocks , write_block);
 	std::ranges::for_each(m_vtu_blocks  , write_block);
 
-	out_file.close();
+	// file will closed in destructor
+	//out_file.close();
 }

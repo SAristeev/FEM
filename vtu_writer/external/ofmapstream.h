@@ -11,8 +11,10 @@
 #define NOMINMAX
 #include <windows.h>
 #else //POSIX
-#include <cerrno>
 #include <unistd.h>
+#include <cstring>
+#include <cerrno>
+
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h> 
@@ -56,7 +58,7 @@ public:
 
 	bool_type flush();
 	bool_type unmap();
-	void close();
+	//void close();
 
 	ofmapstream& operator<<(std::string const& data);
 
@@ -242,11 +244,11 @@ inline bool_type ofmapstream::unmap()
 }
 
 
-inline void ofmapstream::close()
-{
-	flush();
-	unmap();
-}
+// inline void ofmapstream::close()
+// {
+// 	flush();
+// 	unmap();
+// }
 
 
 inline uint64_t ofmapstream::tellp()

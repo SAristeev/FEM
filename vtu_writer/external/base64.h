@@ -4,7 +4,8 @@
 
 #include <iostream>
 #include <string>
-
+#include <cmath>
+#include <span>
 namespace base64
 {
 	size_t esize(size_t data_size);
@@ -40,7 +41,7 @@ namespace base64
 
 inline size_t base64::esize(size_t data_size)
 {
-	return 4 * (size_t)ceil((double)data_size / 3.0);
+	return 4 * (size_t)std::ceil((double)data_size / 3.0);
 }
 
 
