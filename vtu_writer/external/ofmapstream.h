@@ -117,7 +117,7 @@ inline void ofmapstream::map(std::string const& filename, uint64_t size)
 		throw std::runtime_error("Win32 API error: cannot create file view " + d_filename + " error code: " + std::to_string(GetLastError()));
 	}
 #else //POSIX
-	d_file_handle = open(d_filename.c_str(), O_RDWR | O_CREAT);
+	d_file_handle = open(d_filename.c_str(), O_RDWR | O_CREAT, S_IRWXU);
 	if (d_file_handle < 0)
 	{
 		throw std::runtime_error("open() error: cannot open file " + d_filename + " error code: " + std::strerror(errno));
