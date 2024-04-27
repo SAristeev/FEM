@@ -9,7 +9,7 @@
 #include <fstream>
 #include <vector>
 #include <string>
-#include "mkl.h"
+#include <mkl.h>
 #include <tbb/tick_count.h>
 #include <tbb/parallel_for.h>
 #include <cmath>
