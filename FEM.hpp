@@ -38,6 +38,7 @@ struct UnstructedMesh {
 	std::vector<int>          nodes_per_elem;
 	std::vector<uint8_t>      elem_type;
 	std::map<int, int>        map_node_numeration;
+	std::map<int, int>        map_element_numeration;
 };
 
 void read_dimensions(const json& fc, int& dim);

@@ -101,7 +101,7 @@ void read_mesh(const json& fc, UnstructedMesh& mesh) {
 	int* elemids_raw = reinterpret_cast<int*>(get_mesh_data("elemids"));
 	std::vector<int>  elemids(elemids_raw, elemids_raw + elems_count);
 	for (int elem_id = 0; elem_id < elems_count; elem_id++) {
-		if (!map_element_numeration.insert_or_assign(elemids_raw[elem_id], elem_id).second) {
+		if (!mesh.map_element_numeration.insert_or_assign(elemids_raw[elem_id], elem_id).second) {
 			throw std::runtime_error("Some elements with the same ID in the mesh.\nToDo: Verify mesh elements");
 		}
 	}
@@ -194,13 +194,16 @@ void buildFullGlobalMatrix(const int& dim, std::span<double>& K, material_t mate
 	D[7] = 0;
 	D[8] = E / (2 * (1 + nu));
 
-
+	CBLAS_LAYOUT layout = CblasColMajor;
+	CBLAS_TRANSPOSE nontrans = CblasNoTrans;
+	CBLAS_TRANSPOSE trans = CblasTrans;
+	const double beta = 1.0;
 	for (int e = 0; e < mesh.elemids.size(); e++) {
 		int nodes = mesh.nodes_per_elem[e + 1] - mesh.nodes_per_elem[e];
 		int Bcols = dim * nodes;
-		double B[Ddim * Bcols];
-		double A[Bcols * Bcols];
-		double Z[Ddim * Bcols];		
+		double B[Ddim * Bcols] = {};
+		double A[Bcols * Bcols] = {};
+		double Z[Ddim * Bcols] = {};		
 		
 		std::vector<int> idx(nodes);
 		for(int i = 0; i < nodes; i++)
@@ -208,126 +211,61 @@ void buildFullGlobalMatrix(const int& dim, std::span<double>& K, material_t mate
 			idx[i] = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + i]);
 		}
 		
-		int i = idx[0];
-		int j = idx[1];
-		int k = idx[2];
-		CBLAS_LAYOUT layout = CblasColMajor;
-		CBLAS_TRANSPOSE nontrans = CblasNoTrans;
-		CBLAS_TRANSPOSE trans = CblasTrans;
-		if(nodes == 3 && dim == 2){
-
-			double S = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
-					(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y)) / 2;
+		if(dim == 2 && nodes == 3){
+			//TRI3
+			double S;
 			for(int id = 0; id < 3; id++)
 			{
-				int i_ = idx[(0 + id) % 3];
-				int j_ = idx[(1 + id) % 3];
-				int k_ = idx[(2 + id) % 3];
-				B[6 * id + 0] = mesh.nodes[j_].y - mesh.nodes[k_].y;
+				int i = idx[(0 + id) % 3];
+				int j = idx[(1 + id) % 3];
+				int k = idx[(2 + id) % 3];
+				B[6 * id + 0] = mesh.nodes[j].y - mesh.nodes[k].y;
 				B[6 * id + 1] = 0;
-				B[6 * id + 2] = mesh.nodes[k_].x - mesh.nodes[j_].x;
+				B[6 * id + 2] = mesh.nodes[k].x - mesh.nodes[j].x;
 				B[6 * id + 3] = 0;
-				B[6 * id + 4] = mesh.nodes[k_].x - mesh.nodes[j_].x;
-				B[6 * id + 5] = mesh.nodes[j_].y - mesh.nodes[k_].y;	
+				B[6 * id + 4] = mesh.nodes[k].x - mesh.nodes[j].x;
+				B[6 * id + 5] = mesh.nodes[j].y - mesh.nodes[k].y;	
+				if(id == 0)
+					S = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
+					(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y)) / 2;
 			}
 			
-			const double beta = 0.0;
 			cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, 1.0 / (2 * S), D, Ddim, B, Ddim, beta, Z, Ddim);
 			cblas_dgemm(layout, trans, nontrans, Bcols, Bcols, Ddim, 0.5, B, Ddim, Z, Ddim, beta, A, Bcols);
-		}
-		
-		
-		
-		int i1 = -1;
-		int j1 = -1;
-		int k1 = -1;
-		for (int q = rows[i]; q < rows[i + 1]; q++) {
-			//zero or one indexing
-			if (cols[q] == i) {
-				i1 = q;
-			}
-			if (cols[q] == j) {
-				j1 = q;
-			}
-			if (cols[q] == k) {
-				k1 = q;
-			}
-		}
-		K[4 * i1 + 0] += A[0 * Bcols + 0];
-		K[4 * i1 + 1] += A[1 * Bcols + 0];
-		K[4 * i1 + 2] += A[0 * Bcols + 1];
-		K[4 * i1 + 3] += A[1 * Bcols + 1];
 
-		K[4 * j1 + 0] += A[2 * Bcols + 0];
-		K[4 * j1 + 1] += A[3 * Bcols + 0];
-		K[4 * j1 + 2] += A[2 * Bcols + 1];
-		K[4 * j1 + 3] += A[3 * Bcols + 1];
+			for(int id = 0; id < 3; id++)
+			{
+				int i_nnz = -1;
+				int j_nnz = -1;
+				int k_nnz = -1;
+				for (int q = rows[idx[id]]; q < rows[idx[id] + 1]; q++) {
+					//zero or one indexing
+					if (cols[q] == idx[0]) {
+						i_nnz = q;
+					}
+					if (cols[q] == idx[1]) {
+						j_nnz = q;
+					}
+					if (cols[q] == idx[2]) {
+						k_nnz = q;
+					}
+				}	
+				K[4 * i_nnz + 0] += A[0 * Bcols + 0 + 2 * id];
+				K[4 * i_nnz + 1] += A[1 * Bcols + 0 + 2 * id];
+				K[4 * i_nnz + 2] += A[0 * Bcols + 1 + 2 * id];
+				K[4 * i_nnz + 3] += A[1 * Bcols + 1 + 2 * id];
 
-		K[4 * k1 + 0] += A[4 * Bcols + 0];
-		K[4 * k1 + 1] += A[5 * Bcols + 0];
-		K[4 * k1 + 2] += A[4 * Bcols + 1];
-		K[4 * k1 + 3] += A[5 * Bcols + 1];
-
-		int i2 = -1;
-		int j2 = -1;
-		int k2 = -1;
-		for (int q = rows[j]; q < rows[j + 1]; q++) {
-			//zero or one indexing
-			if (cols[q] == i) {
-				i2 = q;
-			}
-			if (cols[q] == j) {
-				j2 = q;
-			}
-			if (cols[q] == k) {
-				k2 = q;
+				K[4 * j_nnz + 0] += A[2 * Bcols + 0 + 2 * id];
+				K[4 * j_nnz + 1] += A[3 * Bcols + 0 + 2 * id];
+				K[4 * j_nnz + 2] += A[2 * Bcols + 1 + 2 * id];
+				K[4 * j_nnz + 3] += A[3 * Bcols + 1 + 2 * id];
+				
+				K[4 * k_nnz + 0] += A[4 * Bcols + 0 + 2 * id];
+				K[4 * k_nnz + 1] += A[5 * Bcols + 0 + 2 * id];
+				K[4 * k_nnz + 2] += A[4 * Bcols + 1 + 2 * id];
+				K[4 * k_nnz + 3] += A[5 * Bcols + 1 + 2 * id];
 			}
 		}
-		K[4 * i2 + 0] += A[0 * Bcols + 2];
-		K[4 * i2 + 1] += A[1 * Bcols + 2];
-		K[4 * i2 + 2] += A[0 * Bcols + 3];
-		K[4 * i2 + 3] += A[1 * Bcols + 3];
-		
-		K[4 * j2 + 0] += A[2 * Bcols + 2];
-		K[4 * j2 + 1] += A[3 * Bcols + 2];
-		K[4 * j2 + 2] += A[2 * Bcols + 3];
-		K[4 * j2 + 3] += A[3 * Bcols + 3];
-		
-		K[4 * k2 + 0] += A[4 * Bcols + 2];
-		K[4 * k2 + 1] += A[5 * Bcols + 2];
-		K[4 * k2 + 2] += A[4 * Bcols + 3];
-		K[4 * k2 + 3] += A[5 * Bcols + 3];
-
-		int i3 = -1;
-		int j3 = -1;
-		int k3 = -1;
-		for (int q = rows[k]; q < rows[k + 1]; q++) {
-			//zero or one indexing
-			if (cols[q] == i) {
-				i3 = q;
-			}
-			if (cols[q] == j) {
-				j3 = q;
-			}
-			if (cols[q] == k) {
-				k3 = q;
-			}
-		}
-		K[4 * i3 + 0] += A[0 * Bcols + 4];
-		K[4 * i3 + 1] += A[1 * Bcols + 4];
-		K[4 * i3 + 2] += A[0 * Bcols + 5];
-		K[4 * i3 + 3] += A[1 * Bcols + 5];
-					 
-		K[4 * j3 + 0] += A[2 * Bcols + 4];
-		K[4 * j3 + 1] += A[3 * Bcols + 4];
-		K[4 * j3 + 2] += A[2 * Bcols + 5];
-		K[4 * j3 + 3] += A[3 * Bcols + 5];
-					 
-		K[4 * k3 + 0] += A[4 * Bcols + 4];
-		K[4 * k3 + 1] += A[5 * Bcols + 4];
-		K[4 * k3 + 2] += A[4 * Bcols + 5];
-		K[4 * k3 + 3] += A[5 * Bcols + 5];
-
 	}
 }
 
