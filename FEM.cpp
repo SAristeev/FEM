@@ -59,15 +59,22 @@ void read_mesh(const json& fc, UnstructedMesh& mesh) {
 	std::vector<int> nodes_per_elem(elems_count + 1);
 	std::vector<uint8_t> elem_type(elems_count + 1);
 
-	// Only 2d Tri mesh
+	// Only 2d Tri or Quad mesh
 	int offset = 0;
 	unsigned char* etypes = reinterpret_cast<unsigned char*>(get_mesh_data("elem_types"));
 	for (int elem_ID = 0; elem_ID < elems_count; elem_ID++) {
 		switch (etypes[elem_ID]) {
 		case '\n':
+			// TRI3
 			nodes_per_elem[elem_ID] = offset;
 			elem_type[elem_ID] = 5;
 			offset += 3;
+			break;
+		case '\f':
+			// QUAD4
+			nodes_per_elem[elem_ID] = offset;
+			elem_type[elem_ID] = 12;
+			offset += 4;
 			break;
 		default:
 			throw std::runtime_error("non tri mesh.\n");
@@ -170,8 +177,8 @@ void buildFullGlobalMatrix(const int& dim, std::span<double>& K, material_t mate
 	
 	// D matrix	
 	int Ddim = 3;
-
-	double* D = reinterpret_cast<double*>(malloc(Ddim * Ddim * sizeof(double)));
+	
+	double D[Ddim * Ddim];
 
 	// filling D
 	fp::fp_t E = material.E;
@@ -187,51 +194,49 @@ void buildFullGlobalMatrix(const int& dim, std::span<double>& K, material_t mate
 	D[7] = 0;
 	D[8] = E / (2 * (1 + nu));
 
-	// only if Tri
-	int Brows = 3;
-	int Bcols = 6;
-	double* B = reinterpret_cast<double*>(malloc(Brows * Bcols * sizeof(double)));
-	double* A = reinterpret_cast<double*>(malloc(Bcols * Bcols * sizeof(double)));
-	double* Z = reinterpret_cast<double*>(malloc(Ddim * Bcols * sizeof(double)));
 
 	for (int e = 0; e < mesh.elemids.size(); e++) {
-		int i = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 0]);
-		int j = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 1]);
-		int k = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + 2]);
-
-		double S = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
-			(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y)) / 2;
+		int nodes = mesh.nodes_per_elem[e + 1] - mesh.nodes_per_elem[e];
+		int Bcols = dim * nodes;
+		double B[Ddim * Bcols];
+		double A[Bcols * Bcols];
+		double Z[Ddim * Bcols];		
 		
-		B[0] = mesh.nodes[j].y - mesh.nodes[k].y;
-		B[1] = 0;
-		B[2] = mesh.nodes[k].x - mesh.nodes[j].x;
-
-		B[3] = 0;
-		B[4] = mesh.nodes[k].x - mesh.nodes[j].x;
-		B[5] = mesh.nodes[j].y - mesh.nodes[k].y;
-
-		B[6] = mesh.nodes[k].y - mesh.nodes[i].y;
-		B[7] = 0;
-		B[8] = mesh.nodes[i].x - mesh.nodes[k].x;
-
-		B[9] = 0;
-		B[10] = mesh.nodes[i].x - mesh.nodes[k].x;
-		B[11] = mesh.nodes[k].y - mesh.nodes[i].y;
-
-		B[12] = mesh.nodes[i].y - mesh.nodes[j].y;
-		B[13] = 0;
-		B[14] = mesh.nodes[j].x - mesh.nodes[i].x;
-
-		B[15] = 0;
-		B[16] = mesh.nodes[j].x - mesh.nodes[i].x;
-		B[17] = mesh.nodes[i].y - mesh.nodes[j].y;
-	
+		std::vector<int> idx(nodes);
+		for(int i = 0; i < nodes; i++)
+		{
+			idx[i] = mesh.map_node_numeration.at(mesh.elems[mesh.nodes_per_elem[e] + i]);
+		}
+		
+		int i = idx[0];
+		int j = idx[1];
+		int k = idx[2];
 		CBLAS_LAYOUT layout = CblasColMajor;
 		CBLAS_TRANSPOSE nontrans = CblasNoTrans;
 		CBLAS_TRANSPOSE trans = CblasTrans;
-		const double beta = 0.0;
-		cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, 1.0 / (2 * S), D, Ddim, B, Brows, beta, Z, Ddim);
-		cblas_dgemm(layout, trans, nontrans, Bcols, Bcols, Ddim, 0.5, B, Ddim, Z, Brows, beta, A, Bcols);
+		if(nodes == 3 && dim == 2){
+
+			double S = std::abs((mesh.nodes[j].x - mesh.nodes[i].x) * (mesh.nodes[k].y - mesh.nodes[i].y) -
+					(mesh.nodes[k].x - mesh.nodes[i].x) * (mesh.nodes[j].y - mesh.nodes[i].y)) / 2;
+			for(int id = 0; id < 3; id++)
+			{
+				int i_ = idx[(0 + id) % 3];
+				int j_ = idx[(1 + id) % 3];
+				int k_ = idx[(2 + id) % 3];
+				B[6 * id + 0] = mesh.nodes[j_].y - mesh.nodes[k_].y;
+				B[6 * id + 1] = 0;
+				B[6 * id + 2] = mesh.nodes[k_].x - mesh.nodes[j_].x;
+				B[6 * id + 3] = 0;
+				B[6 * id + 4] = mesh.nodes[k_].x - mesh.nodes[j_].x;
+				B[6 * id + 5] = mesh.nodes[j_].y - mesh.nodes[k_].y;	
+			}
+			
+			const double beta = 0.0;
+			cblas_dgemm(layout, nontrans, nontrans, Ddim, Bcols, Ddim, 1.0 / (2 * S), D, Ddim, B, Ddim, beta, Z, Ddim);
+			cblas_dgemm(layout, trans, nontrans, Bcols, Bcols, Ddim, 0.5, B, Ddim, Z, Ddim, beta, A, Bcols);
+		}
+		
+		
 		
 		int i1 = -1;
 		int j1 = -1;
@@ -324,10 +329,6 @@ void buildFullGlobalMatrix(const int& dim, std::span<double>& K, material_t mate
 		K[4 * k3 + 3] += A[5 * Bcols + 5];
 
 	}
-	free(B);
-	free(A);
-	free(Z);
-	free(D);
 }
 
 void createLoads(const int& dim, const json& fc, std::span<double>& F, const UnstructedMesh& mesh) {
@@ -876,5 +877,23 @@ void resultants(const int& dim, material_t material, std::span<double>& eps, std
 	free(B.data());
 	free(u.data());
 	free(sigma_loc.data());
+
+}
+
+void print_matrix(const int& dim, std::span<double>& K, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols)
+{
+
+	std::ofstream file("A.bsr");
+
+	int n = rows.size() - 1;
+	int nz = rows[n];
+
+	file << n << " " << nz << " " << dim << std::endl;
+
+	for (size_t i = 0; i < n + 1; i++) { file << rows[i] << " "; } file << std::endl;
+	for (size_t i = 0; i < nz; i++) { file << cols[i] << " "; } file << std::endl;
+	for (size_t i = 0; i < dim * dim * nz; i++) { file << K[i] << " "; } file << std::endl;
+
+	file.close();
 
 }

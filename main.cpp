@@ -72,13 +72,14 @@ int main(int argc, char* argv[]) {
     std::span<MKL_INT> rows;
     std::span<MKL_INT> cols;
     buildFullGlobalMatrixStruct(mesh, rows, cols);
-
+    
     std::span<double> K;
     buildFullGlobalMatrix(dim, K, materials[0], mesh, rows, cols);
-
+    
     std::span<double> F;
     createLoads(dim, fc, F, mesh);
     applyconstraints(fc, K, rows, cols, F, mesh);
+    print_matrix(dim, K, rows, cols);
     std::span<double> x(reinterpret_cast<double*>(malloc(F.size() * sizeof(double))), F.size());
     std::fill(x.begin(), x.end(), 0);
     solve(dim, K, rows, cols, 1, F, x);

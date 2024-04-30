@@ -52,5 +52,5 @@ void buildFullGlobalMatrixStruct(const UnstructedMesh& mesh, std::span<MKL_INT>&
 void buildFullGlobalMatrix(const int& dim, std::span<double>& K, material_t mat, const UnstructedMesh& mesh, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols);
 void resultants(const int& dim, material_t material, std::span<double>& eps, std::span<double>& sigma, const std::span<double>& x, const UnstructedMesh& mesh, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols);
 
-
+void print_matrix(const int& dim, std::span<double>& K, const std::span<MKL_INT>& rows, const std::span<MKL_INT>& cols);
 #endif // !__FEM_HPP__
